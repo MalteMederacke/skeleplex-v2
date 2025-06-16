@@ -1,0 +1,3557 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../_utils/">
+      
+      
+        <link rel="next" href="../actions/">
+      
+      
+      <link rel="icon" href="../../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.14">
+    
+    
+      
+        <title>_viewer_controller - Skeleplex</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.342714a4.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#skeleplex.app._viewer_controller" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../../.." title="Skeleplex" class="md-header__button md-logo" aria-label="Skeleplex" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Skeleplex
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              _viewer_controller
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../.." title="Skeleplex" class="md-nav__button md-logo" aria-label="Skeleplex" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Skeleplex
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Code Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Code Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    skeleplex
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            skeleplex
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1_1" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    app
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2_1_1" id="__nav_2_1_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_1_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_1_1">
+            <span class="md-nav__icon md-icon"></span>
+            app
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../_app/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    _app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../_constants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    _constants
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../_curate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    _curate
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../_data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    _data
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../_utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    _utils
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    _viewer_controller
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    _viewer_controller
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;MainCanvasController
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" MainCanvasController">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.scene_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;scene_id
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_edge_callback" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;add_skeleton_edge_callback
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" add_skeleton_edge_callback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_edge_callback(callback)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_node_callback" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;add_skeleton_node_callback
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" add_skeleton_node_callback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_node_callback(callback)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_node_callback(callback_type)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback_type
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.look_at_skeleton" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;look_at_skeleton
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_edge_callback" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;remove_skeleton_edge_callback
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" remove_skeleton_edge_callback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_edge_callback(callback)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_edge_callback(callback_type)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback_type
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_node_callback" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;remove_skeleton_node_callback
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" remove_skeleton_node_callback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_node_callback(callback)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_node_callback(callback_type)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback_type
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.set_edge_highlight" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;set_edge_highlight
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" set_edge_highlight">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.set_edge_highlight(edge_coordinates)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;edge_coordinates
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.set_node_highlight" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;set_node_highlight
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" set_node_highlight">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.set_node_highlight(node_coordinates)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;node_coordinates
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.update_skeleton_geometry" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;update_skeleton_geometry
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.RenderedSkeletonComponents" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RenderedSkeletonComponents
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" RenderedSkeletonComponents">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.RenderedSkeletonComponents.populated" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;populated
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.ViewerController" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ViewerController
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" ViewerController">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.ViewerController.main_canvas" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;main_canvas
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../actions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    actions
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1_1_8" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../cellier/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    cellier
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2_1_1_8" id="__nav_2_1_1_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_1_1_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1_1_8">
+            <span class="md-nav__icon md-icon"></span>
+            cellier
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cellier/utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    utils
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../functions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    functions
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1_1_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../qt/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    qt
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2_1_1_10" id="__nav_2_1_1_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_1_1_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1_1_10">
+            <span class="md-nav__icon md-icon"></span>
+            qt
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../qt/app_controls/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    app_controls
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../qt/auxiliary_views/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    auxiliary_views
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../qt/flat_group_box/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    flat_group_box
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../qt/main_viewer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    main_viewer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../qt/styles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    styles
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../qt/window/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    window
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../data/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    data
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2_1_2" id="__nav_2_1_2_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_1_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1_2">
+            <span class="md-nav__icon md-icon"></span>
+            data
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../data/bifurcating_tree/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    bifurcating_tree
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../data/skeleton_image/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    skeleton_image
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../data/skeletons/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    skeletons
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../graph/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    graph
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2_1_3" id="__nav_2_1_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_1_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1_3">
+            <span class="md-nav__icon md-icon"></span>
+            graph
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../graph/constants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    constants
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../graph/image_to_graph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    image_to_graph
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../graph/modify_graph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    modify_graph
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../graph/sample/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    sample
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../graph/skeleton_graph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    skeleton_graph
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../graph/spline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    spline
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../graph/utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    utils
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../measurements/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    measurements
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2_1_4" id="__nav_2_1_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_1_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1_4">
+            <span class="md-nav__icon md-icon"></span>
+            measurements
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../measurements/angles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    angles
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../measurements/fit_surface/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    fit_surface
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../measurements/graph_properties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    graph_properties
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../measurements/utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    utils
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../skeleton/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    skeleton
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2_1_5" id="__nav_2_1_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_1_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1_5">
+            <span class="md-nav__icon md-icon"></span>
+            skeleton
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../skeleton/_segment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    _segment
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../skeleton/_skeletonize/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    _skeletonize
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../skeleton/_utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    _utils
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../utils/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    utils
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2_1_6" id="__nav_2_1_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_1_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1_6">
+            <span class="md-nav__icon md-icon"></span>
+            utils
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../utils/_geometry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    _geometry
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1_7" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../visualize/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    visualize
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2_1_7" id="__nav_2_1_7_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_1_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1_7">
+            <span class="md-nav__icon md-icon"></span>
+            visualize
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../visualize/spline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    spline
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;MainCanvasController
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" MainCanvasController">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.scene_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;scene_id
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_edge_callback" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;add_skeleton_edge_callback
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" add_skeleton_edge_callback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_edge_callback(callback)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_node_callback" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;add_skeleton_node_callback
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" add_skeleton_node_callback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_node_callback(callback)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_node_callback(callback_type)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback_type
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.look_at_skeleton" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;look_at_skeleton
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_edge_callback" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;remove_skeleton_edge_callback
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" remove_skeleton_edge_callback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_edge_callback(callback)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_edge_callback(callback_type)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback_type
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_node_callback" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;remove_skeleton_node_callback
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" remove_skeleton_node_callback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_node_callback(callback)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_node_callback(callback_type)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;callback_type
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.set_edge_highlight" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;set_edge_highlight
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" set_edge_highlight">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.set_edge_highlight(edge_coordinates)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;edge_coordinates
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.set_node_highlight" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;set_node_highlight
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" set_node_highlight">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.set_node_highlight(node_coordinates)" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-parameter"></code>&nbsp;node_coordinates
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.MainCanvasController.update_skeleton_geometry" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;update_skeleton_geometry
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.RenderedSkeletonComponents" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RenderedSkeletonComponents
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" RenderedSkeletonComponents">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.RenderedSkeletonComponents.populated" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;populated
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.ViewerController" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ViewerController
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" ViewerController">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#skeleplex.app._viewer_controller.ViewerController.main_canvas" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;main_canvas
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h1 id="skeleplex.app._viewer_controller" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-module"></code>            <span class="doc doc-object-name doc-module-name">skeleplex.app._viewer_controller</span>
+
+
+</h1>
+
+    <div class="doc doc-contents first">
+
+        <p>Classes for interfacing with the viewer.</p>
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Classes:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+          <b><code><a class="autorefs autorefs-internal" title="            MainCanvasController (skeleplex.app._viewer_controller.MainCanvasController)" href="#skeleplex.app._viewer_controller.MainCanvasController">MainCanvasController</a></code></b>
+          –
+          <div class="doc-md-description">
+            <p>A class for controlling the main canvas.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><a class="autorefs autorefs-internal" title="            RenderedSkeletonComponents
+
+
+  
+      dataclass
+   (skeleplex.app._viewer_controller.RenderedSkeletonComponents)" href="#skeleplex.app._viewer_controller.RenderedSkeletonComponents">RenderedSkeletonComponents</a></code></b>
+          –
+          <div class="doc-md-description">
+            <p>A class for storing the components for a rendered skeleton.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+          <b><code><a class="autorefs autorefs-internal" title="            ViewerController (skeleplex.app._viewer_controller.ViewerController)" href="#skeleplex.app._viewer_controller.ViewerController">ViewerController</a></code></b>
+          –
+          <div class="doc-md-description">
+            <p>A class for controlling the viewer backend.</p>
+          </div>
+        </li>
+    </ul>
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="skeleplex.app._viewer_controller.MainCanvasController" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">MainCanvasController</span>
+
+
+</h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">MainCanvasController</span><span class="p">(</span><span class="n"><span title="skeleplex.app._viewer_controller.MainCanvasController(scene_id)">scene_id</span></span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a></span><span class="p">,</span> <span class="n"><span title="skeleplex.app._viewer_controller.MainCanvasController(backend)">backend</span></span><span class="p">:</span> <span class="n"><span title="cellier.viewer_controller.CellierController">CellierController</span></span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+
+        <p>A class for controlling the main canvas.</p>
+
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <ul>
+          <li class="doc-section-item field-body">
+            <b><code><a class="autorefs autorefs-internal" title="            add_skeleton_edge_callback (skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_edge_callback)" href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_edge_callback">add_skeleton_edge_callback</a></code></b>
+            –
+            <div class="doc-md-description">
+              <p>Add a callback to the skeleton edge visual.</p>
+            </div>
+          </li>
+          <li class="doc-section-item field-body">
+            <b><code><a class="autorefs autorefs-internal" title="            add_skeleton_node_callback (skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_node_callback)" href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_node_callback">add_skeleton_node_callback</a></code></b>
+            –
+            <div class="doc-md-description">
+              <p>Add a callback to the skeleton node visual.</p>
+            </div>
+          </li>
+          <li class="doc-section-item field-body">
+            <b><code><a class="autorefs autorefs-internal" title="            look_at_skeleton (skeleplex.app._viewer_controller.MainCanvasController.look_at_skeleton)" href="#skeleplex.app._viewer_controller.MainCanvasController.look_at_skeleton">look_at_skeleton</a></code></b>
+            –
+            <div class="doc-md-description">
+              <p>Adjust the camera to look at the skeleton.</p>
+            </div>
+          </li>
+          <li class="doc-section-item field-body">
+            <b><code><a class="autorefs autorefs-internal" title="            remove_skeleton_edge_callback (skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_edge_callback)" href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_edge_callback">remove_skeleton_edge_callback</a></code></b>
+            –
+            <div class="doc-md-description">
+              <p>Remove a callback from the skeleton edge visual.</p>
+            </div>
+          </li>
+          <li class="doc-section-item field-body">
+            <b><code><a class="autorefs autorefs-internal" title="            remove_skeleton_node_callback (skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_node_callback)" href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_node_callback">remove_skeleton_node_callback</a></code></b>
+            –
+            <div class="doc-md-description">
+              <p>Remove a callback from the skeleton node visual.</p>
+            </div>
+          </li>
+          <li class="doc-section-item field-body">
+            <b><code><a class="autorefs autorefs-internal" title="            set_edge_highlight (skeleplex.app._viewer_controller.MainCanvasController.set_edge_highlight)" href="#skeleplex.app._viewer_controller.MainCanvasController.set_edge_highlight">set_edge_highlight</a></code></b>
+            –
+            <div class="doc-md-description">
+              <p>Set the edge highlight coordinates.</p>
+            </div>
+          </li>
+          <li class="doc-section-item field-body">
+            <b><code><a class="autorefs autorefs-internal" title="            set_node_highlight (skeleplex.app._viewer_controller.MainCanvasController.set_node_highlight)" href="#skeleplex.app._viewer_controller.MainCanvasController.set_node_highlight">set_node_highlight</a></code></b>
+            –
+            <div class="doc-md-description">
+              <p>Set the node highlight coordinates.</p>
+            </div>
+          </li>
+          <li class="doc-section-item field-body">
+            <b><code><a class="autorefs autorefs-internal" title="            update_skeleton_geometry (skeleplex.app._viewer_controller.MainCanvasController.update_skeleton_geometry)" href="#skeleplex.app._viewer_controller.MainCanvasController.update_skeleton_geometry">update_skeleton_geometry</a></code></b>
+            –
+            <div class="doc-md-description">
+              <p>Update the geometry of the skeleton in the viewer.</p>
+            </div>
+          </li>
+    </ul>
+
+
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+          <b><code><a class="autorefs autorefs-internal" title="            scene_id
+
+
+  
+      property
+   (skeleplex.app._viewer_controller.MainCanvasController.scene_id)" href="#skeleplex.app._viewer_controller.MainCanvasController.scene_id">scene_id</a></code></b>
+              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>Get the scene ID of the main canvas.</p>
+          </div>
+        </li>
+    </ul>
+
+                  <details class="quote">
+                    <summary>Source code in <code>skeleplex/app/_viewer_controller.py</code></summary>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">60</span>
+<span class="normal">61</span>
+<span class="normal">62</span>
+<span class="normal">63</span>
+<span class="normal">64</span>
+<span class="normal">65</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scene_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="n">CellierController</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_scene_id</span> <span class="o">=</span> <span class="n">scene_id</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span> <span class="o">=</span> <span class="n">backend</span>
+
+    <span class="c1"># this will store the rendered skeleton components</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span> <span class="o">=</span> <span class="n">RenderedSkeletonComponents</span><span class="p">()</span>
+</code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="skeleplex.app._viewer_controller.MainCanvasController.scene_id" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">scene_id</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="n">scene_id</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Get the scene ID of the main canvas.</p>
+
+    </div>
+
+</div>
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_edge_callback" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">add_skeleton_edge_callback</span>
+
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">add_skeleton_edge_callback</span><span class="p">(</span><span class="n"><a class="autorefs autorefs-internal" title="callback (skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_edge_callback(callback))" href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_edge_callback(callback)">callback</a></span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="collections.abc.Callable" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable">Callable</a></span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Add a callback to the skeleton edge visual.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+<h4 id="skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_edge_callback(callback)" class="doc doc-heading doc-heading-parameter">              <b><code>callback</code></b>
+</h4>              (<code><a class="autorefs autorefs-external" title="collections.abc.Callable" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable">Callable</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The callback function.</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="quote">
+              <summary>Source code in <code>skeleplex/app/_viewer_controller.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">add_skeleton_edge_callback</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">callback</span><span class="p">:</span> <span class="n">Callable</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a callback to the skeleton edge visual.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    callback : Callable</span>
+<span class="sd">        The callback function.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">populated</span><span class="p">():</span>
+        <span class="c1"># don&#39;t do anything if the skeleton is not rendered</span>
+        <span class="k">return</span>
+
+    <span class="c1"># add for the data visual</span>
+    <span class="k">if</span> <span class="p">(</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edges_visual</span><span class="o">.</span><span class="n">id</span>
+        <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">mouse</span><span class="o">.</span><span class="n">visual_signals</span>
+    <span class="p">):</span>
+        <span class="c1"># if the visual isn&#39;t registered, register it</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">mouse</span><span class="o">.</span><span class="n">register_visual</span><span class="p">(</span>
+            <span class="n">visual_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edges_visual</span><span class="o">.</span><span class="n">id</span>
+        <span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">mouse</span><span class="o">.</span><span class="n">subscribe_to_visual</span><span class="p">(</span>
+        <span class="n">visual_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edges_visual</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+        <span class="n">callback</span><span class="o">=</span><span class="n">partial</span><span class="p">(</span><span class="n">callback</span><span class="p">,</span> <span class="n">click_source</span><span class="o">=</span><span class="s2">&quot;data&quot;</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="c1"># add for the highlight visual</span>
+    <span class="k">if</span> <span class="p">(</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edge_highlight_visual</span><span class="o">.</span><span class="n">id</span>
+        <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">mouse</span><span class="o">.</span><span class="n">visual_signals</span>
+    <span class="p">):</span>
+        <span class="c1"># if the visual isn&#39;t registered, register it</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">mouse</span><span class="o">.</span><span class="n">register_visual</span><span class="p">(</span>
+            <span class="n">visual_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edge_highlight_visual</span><span class="o">.</span><span class="n">id</span>
+        <span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">mouse</span><span class="o">.</span><span class="n">subscribe_to_visual</span><span class="p">(</span>
+        <span class="n">visual_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edge_highlight_visual</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+        <span class="n">callback</span><span class="o">=</span><span class="n">partial</span><span class="p">(</span><span class="n">callback</span><span class="p">,</span> <span class="n">click_source</span><span class="o">=</span><span class="s2">&quot;highlight&quot;</span><span class="p">),</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_node_callback" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">add_skeleton_node_callback</span>
+
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">add_skeleton_node_callback</span><span class="p">(</span><span class="n"><a class="autorefs autorefs-internal" title="callback (skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_node_callback(callback))" href="#skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_node_callback(callback)">callback</a></span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="collections.abc.Callable" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable">Callable</a></span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Add a callback to the skeleton node visual.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+<h4 id="skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_node_callback(callback)" class="doc doc-heading doc-heading-parameter">              <b><code>callback</code></b>
+</h4>              (<code><a class="autorefs autorefs-external" title="collections.abc.Callable" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable">Callable</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The callback function.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+<h4 id="skeleplex.app._viewer_controller.MainCanvasController.add_skeleton_node_callback(callback_type)" class="doc doc-heading doc-heading-parameter">              <b><code>callback_type</code></b>
+</h4>              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#tuple">tuple</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a>, ...]</code>)
+          –
+          <div class="doc-md-description">
+            <p>The type of callback. See the pygfx documentation for event types.</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="quote">
+              <summary>Source code in <code>skeleplex/app/_viewer_controller.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span>
+<span class="normal">311</span>
+<span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span>
+<span class="normal">315</span>
+<span class="normal">316</span>
+<span class="normal">317</span>
+<span class="normal">318</span>
+<span class="normal">319</span>
+<span class="normal">320</span>
+<span class="normal">321</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">add_skeleton_node_callback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">callback</span><span class="p">:</span> <span class="n">Callable</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a callback to the skeleton node visual.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    callback : Callable</span>
+<span class="sd">        The callback function.</span>
+<span class="sd">    callback_type : tuple[str, ...]</span>
+<span class="sd">        The type of callback. See the pygfx documentation for event types.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">populated</span><span class="p">():</span>
+        <span class="c1"># don&#39;t do anything if the skeleton is not rendered</span>
+        <span class="k">return</span>
+
+    <span class="c1"># add for the data visual</span>
+    <span class="k">if</span> <span class="p">(</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_visual</span><span class="o">.</span><span class="n">id</span>
+        <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">mouse</span><span class="o">.</span><span class="n">visual_signals</span>
+    <span class="p">):</span>
+        <span class="c1"># if the visual isn&#39;t registered, register it</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">mouse</span><span class="o">.</span><span class="n">register_visual</span><span class="p">(</span>
+            <span class="n">visual_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_visual</span><span class="o">.</span><span class="n">id</span>
+        <span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">mouse</span><span class="o">.</span><span class="n">subscribe_to_visual</span><span class="p">(</span>
+        <span class="n">visual_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_visual</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+        <span class="n">callback</span><span class="o">=</span><span class="n">partial</span><span class="p">(</span><span class="n">callback</span><span class="p">,</span> <span class="n">click_source</span><span class="o">=</span><span class="s2">&quot;data&quot;</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="c1"># add for the highlight visual</span>
+    <span class="k">if</span> <span class="p">(</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_highlight_visual</span><span class="o">.</span><span class="n">id</span>
+        <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">mouse</span><span class="o">.</span><span class="n">visual_signals</span>
+    <span class="p">):</span>
+        <span class="c1"># if the visual isn&#39;t registered, register it</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">mouse</span><span class="o">.</span><span class="n">register_visual</span><span class="p">(</span>
+            <span class="n">visual_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_highlight_visual</span><span class="o">.</span><span class="n">id</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">mouse</span><span class="o">.</span><span class="n">subscribe_to_visual</span><span class="p">(</span>
+            <span class="n">visual_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_highlight_visual</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+            <span class="n">callback</span><span class="o">=</span><span class="n">partial</span><span class="p">(</span><span class="n">callback</span><span class="p">,</span> <span class="n">click_source</span><span class="o">=</span><span class="s2">&quot;highlight&quot;</span><span class="p">),</span>
+        <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="skeleplex.app._viewer_controller.MainCanvasController.look_at_skeleton" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">look_at_skeleton</span>
+
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">look_at_skeleton</span><span class="p">(</span><span class="n"><span title="skeleplex.app._viewer_controller.MainCanvasController.look_at_skeleton(view_direction)">view_direction</span></span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#tuple">tuple</a></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></span><span class="p">,</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></span><span class="p">,</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n"><span title="skeleplex.app._viewer_controller.MainCanvasController.look_at_skeleton(up)">up</span></span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#tuple">tuple</a></span><span class="p">[</span><span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></span><span class="p">,</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></span><span class="p">,</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#int">int</a></span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Adjust the camera to look at the skeleton.</p>
+
+
+            <details class="quote">
+              <summary>Source code in <code>skeleplex/app/_viewer_controller.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">look_at_skeleton</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">view_direction</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="n">up</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Adjust the camera to look at the skeleton.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">populated</span><span class="p">():</span>
+        <span class="c1"># don&#39;t do anything if the skeleton is not rendered</span>
+        <span class="k">return</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">look_at_visual</span><span class="p">(</span>
+        <span class="n">visual_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_visual</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+        <span class="n">view_direction</span><span class="o">=</span><span class="n">view_direction</span><span class="p">,</span>
+        <span class="n">up</span><span class="o">=</span><span class="n">up</span><span class="p">,</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_edge_callback" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">remove_skeleton_edge_callback</span>
+
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">remove_skeleton_edge_callback</span><span class="p">(</span><span class="n"><a class="autorefs autorefs-internal" title="callback (skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_edge_callback(callback))" href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_edge_callback(callback)">callback</a></span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="collections.abc.Callable" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable">Callable</a></span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Remove a callback from the skeleton edge visual.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+<h4 id="skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_edge_callback(callback)" class="doc doc-heading doc-heading-parameter">              <b><code>callback</code></b>
+</h4>              (<code><a class="autorefs autorefs-external" title="collections.abc.Callable" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable">Callable</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The callback function.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+<h4 id="skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_edge_callback(callback_type)" class="doc doc-heading doc-heading-parameter">              <b><code>callback_type</code></b>
+</h4>              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#tuple">tuple</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a>, ...]</code>)
+          –
+          <div class="doc-md-description">
+            <p>The type of callback. See the pygfx documentation for event types.</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="quote">
+              <summary>Source code in <code>skeleplex/app/_viewer_controller.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">323</span>
+<span class="normal">324</span>
+<span class="normal">325</span>
+<span class="normal">326</span>
+<span class="normal">327</span>
+<span class="normal">328</span>
+<span class="normal">329</span>
+<span class="normal">330</span>
+<span class="normal">331</span>
+<span class="normal">332</span>
+<span class="normal">333</span>
+<span class="normal">334</span>
+<span class="normal">335</span>
+<span class="normal">336</span>
+<span class="normal">337</span>
+<span class="normal">338</span>
+<span class="normal">339</span>
+<span class="normal">340</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">remove_skeleton_edge_callback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">callback</span><span class="p">:</span> <span class="n">Callable</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a callback from the skeleton edge visual.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    callback : Callable</span>
+<span class="sd">        The callback function.</span>
+<span class="sd">    callback_type : tuple[str, ...]</span>
+<span class="sd">        The type of callback. See the pygfx documentation for event types.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">populated</span><span class="p">():</span>
+        <span class="c1"># don&#39;t do anything if the skeleton is not rendered</span>
+        <span class="k">return</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">remove_visual_callback</span><span class="p">(</span>
+        <span class="n">visual_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edges_visual</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+        <span class="n">callback</span><span class="o">=</span><span class="n">callback</span><span class="p">,</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_node_callback" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">remove_skeleton_node_callback</span>
+
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">remove_skeleton_node_callback</span><span class="p">(</span><span class="n"><a class="autorefs autorefs-internal" title="callback (skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_node_callback(callback))" href="#skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_node_callback(callback)">callback</a></span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="collections.abc.Callable" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable">Callable</a></span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Remove a callback from the skeleton node visual.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+<h4 id="skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_node_callback(callback)" class="doc doc-heading doc-heading-parameter">              <b><code>callback</code></b>
+</h4>              (<code><a class="autorefs autorefs-external" title="collections.abc.Callable" href="https://docs.python.org/3/library/collections.abc.html#collections.abc.Callable">Callable</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The callback function.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+<h4 id="skeleplex.app._viewer_controller.MainCanvasController.remove_skeleton_node_callback(callback_type)" class="doc doc-heading doc-heading-parameter">              <b><code>callback_type</code></b>
+</h4>              (<code><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#tuple">tuple</a>[<a class="autorefs autorefs-external" href="https://docs.python.org/3/library/stdtypes.html#str">str</a>, ...]</code>)
+          –
+          <div class="doc-md-description">
+            <p>The type of callback. See the pygfx documentation for event types.</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="quote">
+              <summary>Source code in <code>skeleplex/app/_viewer_controller.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span>
+<span class="normal">351</span>
+<span class="normal">352</span>
+<span class="normal">353</span>
+<span class="normal">354</span>
+<span class="normal">355</span>
+<span class="normal">356</span>
+<span class="normal">357</span>
+<span class="normal">358</span>
+<span class="normal">359</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">remove_skeleton_node_callback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">callback</span><span class="p">:</span> <span class="n">Callable</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a callback from the skeleton node visual.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    callback : Callable</span>
+<span class="sd">        The callback function.</span>
+<span class="sd">    callback_type : tuple[str, ...]</span>
+<span class="sd">        The type of callback. See the pygfx documentation for event types.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">populated</span><span class="p">():</span>
+        <span class="c1"># don&#39;t do anything if the skeleton is not rendered</span>
+        <span class="k">return</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">remove_visual_callback</span><span class="p">(</span>
+        <span class="n">visual_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_visual</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+        <span class="n">callback</span><span class="o">=</span><span class="n">callback</span><span class="p">,</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="skeleplex.app._viewer_controller.MainCanvasController.set_edge_highlight" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">set_edge_highlight</span>
+
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">set_edge_highlight</span><span class="p">(</span><span class="n"><a class="autorefs autorefs-internal" title="edge_coordinates (skeleplex.app._viewer_controller.MainCanvasController.set_edge_highlight(edge_coordinates))" href="#skeleplex.app._viewer_controller.MainCanvasController.set_edge_highlight(edge_coordinates)">edge_coordinates</a></span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="numpy.ndarray" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray">ndarray</a></span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Set the edge highlight coordinates.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+<h4 id="skeleplex.app._viewer_controller.MainCanvasController.set_edge_highlight(edge_coordinates)" class="doc doc-heading doc-heading-parameter">              <b><code>edge_coordinates</code></b>
+</h4>              (<code><a class="autorefs autorefs-external" title="numpy.ndarray" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray">ndarray</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The coordinates of the edge to highlight.</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="quote">
+              <summary>Source code in <code>skeleplex/app/_viewer_controller.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">set_edge_highlight</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">edge_coordinates</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Set the edge highlight coordinates.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    edge_coordinates : np.ndarray</span>
+<span class="sd">        The coordinates of the edge to highlight.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">populated</span><span class="p">():</span>
+        <span class="c1"># don&#39;t do anything if the skeleton is not rendered</span>
+        <span class="k">return</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edge_highlight_store</span><span class="o">.</span><span class="n">coordinates</span> <span class="o">=</span> <span class="n">edge_coordinates</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">float32</span>
+    <span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">reslice_scene</span><span class="p">(</span><span class="n">scene_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">scene_id</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="skeleplex.app._viewer_controller.MainCanvasController.set_node_highlight" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">set_node_highlight</span>
+
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">set_node_highlight</span><span class="p">(</span><span class="n"><a class="autorefs autorefs-internal" title="node_coordinates (skeleplex.app._viewer_controller.MainCanvasController.set_node_highlight(node_coordinates))" href="#skeleplex.app._viewer_controller.MainCanvasController.set_node_highlight(node_coordinates)">node_coordinates</a></span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="numpy.ndarray" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray">ndarray</a></span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Set the node highlight coordinates.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+<h4 id="skeleplex.app._viewer_controller.MainCanvasController.set_node_highlight(node_coordinates)" class="doc doc-heading doc-heading-parameter">              <b><code>node_coordinates</code></b>
+</h4>              (<code><a class="autorefs autorefs-external" title="numpy.ndarray" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray">ndarray</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>The coordinates of the node to highlight.</p>
+          </div>
+        </li>
+    </ul>
+
+
+            <details class="quote">
+              <summary>Source code in <code>skeleplex/app/_viewer_controller.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">set_node_highlight</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span>
+    <span class="n">node_coordinates</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Set the node highlight coordinates.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    node_coordinates : np.ndarray</span>
+<span class="sd">        The coordinates of the node to highlight.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">populated</span><span class="p">():</span>
+        <span class="c1"># don&#39;t do anything if the skeleton is not rendered</span>
+        <span class="k">return</span>
+
+    <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_highlight_store</span><span class="o">.</span><span class="n">coordinates</span> <span class="o">=</span> <span class="n">node_coordinates</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">float32</span>
+    <span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">reslice_scene</span><span class="p">(</span><span class="n">scene_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">scene_id</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="skeleplex.app._viewer_controller.MainCanvasController.update_skeleton_geometry" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">update_skeleton_geometry</span>
+
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">update_skeleton_geometry</span><span class="p">(</span><span class="n"><span title="skeleplex.app._viewer_controller.MainCanvasController.update_skeleton_geometry(edge_coordinates)">edge_coordinates</span></span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="numpy.ndarray" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray">ndarray</a></span><span class="p">,</span> <span class="n"><span title="skeleplex.app._viewer_controller.MainCanvasController.update_skeleton_geometry(node_coordinates)">node_coordinates</span></span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-external" title="numpy.ndarray" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray">ndarray</a></span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Update the geometry of the skeleton in the viewer.</p>
+
+
+            <details class="quote">
+              <summary>Source code in <code>skeleplex/app/_viewer_controller.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 72</span>
+<span class="normal"> 73</span>
+<span class="normal"> 74</span>
+<span class="normal"> 75</span>
+<span class="normal"> 76</span>
+<span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">update_skeleton_geometry</span><span class="p">(</span>
+    <span class="bp">self</span><span class="p">,</span> <span class="n">edge_coordinates</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">node_coordinates</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Update the geometry of the skeleton in the viewer.&quot;&quot;&quot;</span>
+    <span class="c1"># make the highlight lines store</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edge_highlight_store</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># if the highlight store is not populated, create it</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edge_highlight_store</span> <span class="o">=</span> <span class="n">LinesMemoryStore</span><span class="p">(</span>
+            <span class="n">coordinates</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">add_data_store</span><span class="p">(</span><span class="n">data_store</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edge_highlight_store</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edge_highlight_visual</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># if the highlight visual is not populated, create it</span>
+        <span class="n">edge_highlight_material_3d</span> <span class="o">=</span> <span class="n">LinesUniformMaterial</span><span class="p">(</span>
+            <span class="n">color</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">size</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">size_coordinate_space</span><span class="o">=</span><span class="s2">&quot;data&quot;</span><span class="p">,</span> <span class="n">opacity</span><span class="o">=</span><span class="mf">1.0</span>
+        <span class="p">)</span>
+
+        <span class="c1"># make the highlight lines model</span>
+        <span class="n">edge_highlight_visual</span> <span class="o">=</span> <span class="n">LinesVisual</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="s2">&quot;edge_highlight&quot;</span><span class="p">,</span>
+            <span class="n">data_store_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edge_highlight_store</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+            <span class="n">material</span><span class="o">=</span><span class="n">edge_highlight_material_3d</span><span class="p">,</span>
+            <span class="n">pick_write</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edge_highlight_visual</span> <span class="o">=</span> <span class="n">edge_highlight_visual</span>
+
+        <span class="c1"># add the visual model to the viewer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">add_visual</span><span class="p">(</span>
+            <span class="n">visual_model</span><span class="o">=</span><span class="n">edge_highlight_visual</span><span class="p">,</span> <span class="n">scene_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">scene_id</span>
+        <span class="p">)</span>
+
+    <span class="c1"># update the lines store</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edges_store</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edges_store</span> <span class="o">=</span> <span class="n">LinesMemoryStore</span><span class="p">(</span><span class="n">coordinates</span><span class="o">=</span><span class="n">edge_coordinates</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">add_data_store</span><span class="p">(</span><span class="n">data_store</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edges_store</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edges_store</span><span class="o">.</span><span class="n">coordinates</span> <span class="o">=</span> <span class="n">edge_coordinates</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edges_visual</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># if the lines visual is not populated, create it</span>
+        <span class="n">edge_lines_material_3d</span> <span class="o">=</span> <span class="n">LinesUniformMaterial</span><span class="p">(</span>
+            <span class="n">color</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">size_coordinate_space</span><span class="o">=</span><span class="s2">&quot;data&quot;</span>
+        <span class="p">)</span>
+
+        <span class="c1"># make the lines model</span>
+        <span class="n">edge_lines_visual</span> <span class="o">=</span> <span class="n">LinesVisual</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="s2">&quot;edge_lines&quot;</span><span class="p">,</span>
+            <span class="n">data_store_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edges_store</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+            <span class="n">material</span><span class="o">=</span><span class="n">edge_lines_material_3d</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">edges_visual</span> <span class="o">=</span> <span class="n">edge_lines_visual</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">add_visual</span><span class="p">(</span>
+            <span class="n">visual_model</span><span class="o">=</span><span class="n">edge_lines_visual</span><span class="p">,</span> <span class="n">scene_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">scene_id</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_highlight_store</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># make the highlight points store if it is not already created</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_highlight_store</span> <span class="o">=</span> <span class="n">PointsMemoryStore</span><span class="p">(</span>
+            <span class="n">coordinates</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">add_data_store</span><span class="p">(</span><span class="n">data_store</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_highlight_store</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_highlight_visual</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># make the highlight points material</span>
+        <span class="n">highlight_points_material_3d</span> <span class="o">=</span> <span class="n">PointsUniformMaterial</span><span class="p">(</span>
+            <span class="n">size</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">size_coordinate_space</span><span class="o">=</span><span class="s2">&quot;data&quot;</span>
+        <span class="p">)</span>
+
+        <span class="c1"># make the highlight points model</span>
+        <span class="n">highlight_points_visual_3d</span> <span class="o">=</span> <span class="n">PointsVisual</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="s2">&quot;node_highlight_points&quot;</span><span class="p">,</span>
+            <span class="n">data_store_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_highlight_store</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+            <span class="n">material</span><span class="o">=</span><span class="n">highlight_points_material_3d</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_highlight_visual</span> <span class="o">=</span> <span class="n">highlight_points_visual_3d</span>
+
+        <span class="c1"># add the highlights to the viewer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">add_visual</span><span class="p">(</span>
+            <span class="n">visual_model</span><span class="o">=</span><span class="n">highlight_points_visual_3d</span><span class="p">,</span> <span class="n">scene_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">scene_id</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_store</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># make the points store if it is not already created</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_store</span> <span class="o">=</span> <span class="n">PointsMemoryStore</span><span class="p">(</span><span class="n">coordinates</span><span class="o">=</span><span class="n">node_coordinates</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">add_data_store</span><span class="p">(</span><span class="n">data_store</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_store</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># update the points store with the new coordinates</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_store</span><span class="o">.</span><span class="n">coordinates</span> <span class="o">=</span> <span class="n">node_coordinates</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_visual</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># make the points material</span>
+        <span class="n">points_material_3d</span> <span class="o">=</span> <span class="n">PointsUniformMaterial</span><span class="p">(</span>
+            <span class="n">size</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">size_coordinate_space</span><span class="o">=</span><span class="s2">&quot;data&quot;</span>
+        <span class="p">)</span>
+
+        <span class="c1"># make the points model</span>
+        <span class="n">points_visual_3d</span> <span class="o">=</span> <span class="n">PointsVisual</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="s2">&quot;node_points&quot;</span><span class="p">,</span>
+            <span class="n">data_store_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_store</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+            <span class="n">material</span><span class="o">=</span><span class="n">points_material_3d</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_skeleton</span><span class="o">.</span><span class="n">node_visual</span> <span class="o">=</span> <span class="n">points_visual_3d</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">add_visual</span><span class="p">(</span>
+            <span class="n">visual_model</span><span class="o">=</span><span class="n">points_visual_3d</span><span class="p">,</span> <span class="n">scene_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">scene_id</span>
+        <span class="p">)</span>
+
+    <span class="c1"># reslice the scene</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">reslice_scene</span><span class="p">(</span><span class="n">scene_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">scene_id</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="skeleplex.app._viewer_controller.RenderedSkeletonComponents" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">RenderedSkeletonComponents</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+</h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">RenderedSkeletonComponents</span><span class="p">(</span><span class="n"><span title="skeleplex.app._viewer_controller.RenderedSkeletonComponents(node_store)">node_store</span></span><span class="p">:</span> <span class="n"><span title="cellier.models.data_stores.points.PointsMemoryStore">PointsMemoryStore</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n"><span title="skeleplex.app._viewer_controller.RenderedSkeletonComponents(node_visual)">node_visual</span></span><span class="p">:</span> <span class="n"><span title="cellier.models.visuals.PointsVisual">PointsVisual</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n"><span title="skeleplex.app._viewer_controller.RenderedSkeletonComponents(node_highlight_store)">node_highlight_store</span></span><span class="p">:</span> <span class="n"><span title="cellier.models.data_stores.points.PointsMemoryStore">PointsMemoryStore</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n"><span title="skeleplex.app._viewer_controller.RenderedSkeletonComponents(node_highlight_visual)">node_highlight_visual</span></span><span class="p">:</span> <span class="n"><span title="cellier.models.visuals.PointsVisual">PointsVisual</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n"><span title="skeleplex.app._viewer_controller.RenderedSkeletonComponents(edges_store)">edges_store</span></span><span class="p">:</span> <span class="n"><span title="cellier.models.data_stores.lines.LinesMemoryStore">LinesMemoryStore</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n"><span title="skeleplex.app._viewer_controller.RenderedSkeletonComponents(edges_visual)">edges_visual</span></span><span class="p">:</span> <span class="n"><span title="cellier.models.visuals.LinesVisual">LinesVisual</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n"><span title="skeleplex.app._viewer_controller.RenderedSkeletonComponents(edge_highlight_store)">edge_highlight_store</span></span><span class="p">:</span> <span class="n"><span title="cellier.models.data_stores.lines.LinesMemoryStore">LinesMemoryStore</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n"><span title="skeleplex.app._viewer_controller.RenderedSkeletonComponents(edge_highlight_visual)">edge_highlight_visual</span></span><span class="p">:</span> <span class="n"><span title="cellier.models.visuals.LinesVisual">LinesVisual</span></span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+
+        <p>A class for storing the components for a rendered skeleton.</p>
+<p>These data are used for accessing the rendered skeleton in the viewer backend.</p>
+
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <ul>
+          <li class="doc-section-item field-body">
+            <b><code><a class="autorefs autorefs-internal" title="            populated (skeleplex.app._viewer_controller.RenderedSkeletonComponents.populated)" href="#skeleplex.app._viewer_controller.RenderedSkeletonComponents.populated">populated</a></code></b>
+            –
+            <div class="doc-md-description">
+              <p>Returns True if all the components are populated.</p>
+            </div>
+          </li>
+    </ul>
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="skeleplex.app._viewer_controller.RenderedSkeletonComponents.populated" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">populated</span>
+
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">populated</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n"><a class="autorefs autorefs-external" href="https://docs.python.org/3/library/functions.html#bool">bool</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Returns True if all the components are populated.</p>
+
+
+            <details class="quote">
+              <summary>Source code in <code>skeleplex/app/_viewer_controller.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">41</span>
+<span class="normal">42</span>
+<span class="normal">43</span>
+<span class="normal">44</span>
+<span class="normal">45</span>
+<span class="normal">46</span>
+<span class="normal">47</span>
+<span class="normal">48</span>
+<span class="normal">49</span>
+<span class="normal">50</span>
+<span class="normal">51</span>
+<span class="normal">52</span>
+<span class="normal">53</span>
+<span class="normal">54</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">populated</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns True if all the components are populated.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">all</span><span class="p">(</span>
+        <span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">node_store</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">node_visual</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">node_highlight_store</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">node_highlight_visual</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">edges_store</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">edges_visual</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">edge_highlight_store</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">edge_highlight_visual</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">]</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="skeleplex.app._viewer_controller.ViewerController" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">ViewerController</span>
+
+
+</h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">ViewerController</span><span class="p">(</span><span class="n"><span title="skeleplex.app._viewer_controller.ViewerController(parent_widget)">parent_widget</span></span><span class="p">:</span> <span class="n"><span title="qtpy.QtWidgets.QWidget">QWidget</span></span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+
+        <p>A class for controlling the viewer backend.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+          <b><code><a class="autorefs autorefs-internal" title="            main_canvas
+
+
+  
+      property
+   (skeleplex.app._viewer_controller.ViewerController.main_canvas)" href="#skeleplex.app._viewer_controller.ViewerController.main_canvas">main_canvas</a></code></b>
+              (<code><a class="autorefs autorefs-internal" title="            MainCanvasController (skeleplex.app._viewer_controller.MainCanvasController)" href="#skeleplex.app._viewer_controller.MainCanvasController">MainCanvasController</a></code>)
+          –
+          <div class="doc-md-description">
+            <p>Get the controller for the main canvas.</p>
+          </div>
+        </li>
+    </ul>
+
+                  <details class="quote">
+                    <summary>Source code in <code>skeleplex/app/_viewer_controller.py</code></summary>
+                    <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">365</span>
+<span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span>
+<span class="normal">371</span>
+<span class="normal">372</span>
+<span class="normal">373</span>
+<span class="normal">374</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent_widget</span><span class="p">:</span> <span class="s2">&quot;QWidget&quot;</span><span class="p">):</span>
+    <span class="n">viewer_model</span><span class="p">,</span> <span class="n">main_canvas_scene_id</span> <span class="o">=</span> <span class="n">make_viewer_model</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span> <span class="o">=</span> <span class="n">make_viewer_controller</span><span class="p">(</span>
+        <span class="n">viewer_model</span><span class="o">=</span><span class="n">viewer_model</span><span class="p">,</span> <span class="n">parent_widget</span><span class="o">=</span><span class="n">parent_widget</span>
+    <span class="p">)</span>
+
+    <span class="c1"># make the main canvas controller</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_main_canvas</span> <span class="o">=</span> <span class="n">MainCanvasController</span><span class="p">(</span>
+        <span class="n">scene_id</span><span class="o">=</span><span class="n">main_canvas_scene_id</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_backend</span>
+    <span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="skeleplex.app._viewer_controller.ViewerController.main_canvas" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">main_canvas</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="n">main_canvas</span><span class="p">:</span> <span class="n"><a class="autorefs autorefs-internal" title="            MainCanvasController (skeleplex.app._viewer_controller.MainCanvasController)" href="#skeleplex.app._viewer_controller.MainCanvasController">MainCanvasController</a></span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Get the controller for the main canvas.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../../../..", "features": ["search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../../../../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../../assets/javascripts/bundle.13a4f30d.min.js"></script>
+      
+    
+  </body>
+</html>
