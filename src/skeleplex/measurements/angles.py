@@ -141,12 +141,17 @@ def compute_midline_branch_angle_branch_nodes(graph: nx.DiGraph):
 
         # store for visualization
         center_points.append(parent_end_node_coordinates)
-        midline_points.append(parent_end_node_coordinates + (50 * midline_vector))
+        midline_points.append(parent_end_node_coordinates + (2000 * midline_vector))
 
     nx.set_edge_attributes(graph, angle_dict, BRANCH_ANGLE_EDGE_KEY)
-    midline_vector = np.array(np.stack([center_points, midline_points], axis=1))
 
-    return graph, midline_vector
+    center_points = np.array(center_points)
+    midline_points = np.array(midline_points)
+
+    offsets = midline_points - center_points
+
+    vec = np.stack([center_points, offsets], axis=1)
+    return graph, vec
 
 
 @angle_metric
