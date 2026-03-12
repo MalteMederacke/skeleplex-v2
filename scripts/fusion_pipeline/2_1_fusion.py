@@ -108,8 +108,8 @@ def scale_image(image: np.ndarray, scale_number: int) -> np.ndarray:
     np.ndarray
         Input arrays scaled to the specified scales.
     """
-    scale_factor = 1 / (2 ** (scale_number))
-    print(scale_factor)
+    scale_factor = int(1 / (2 ** (scale_number)))
+    print("Scale factor: ", scale_factor)
 
     sz, sy, sx = image.shape
 
@@ -123,9 +123,10 @@ def scale_image(image: np.ndarray, scale_number: int) -> np.ndarray:
     print(dask_arr.shape)
 
     dask_arr.to_zarr(
-        f"data/{image_prefix}_image_scaled.zarr/scale{scale_number}", overwrite=True
+        f"/data/{image_prefix}_image_scaled.zarr/scale{scale_number}",
+        overwrite=True,
     )
-    group = zarr.open_group(f"data/{image_prefix}_image_scaled.zarr", mode="a")
+    group = zarr.open_group(f"/data/{image_prefix}_image_scaled.zarr", mode="a")
     group[f"scale{scale_number}"].attrs["scale"] = [
         scale_factor,
         scale_factor,
@@ -138,19 +139,17 @@ def scale_image(image: np.ndarray, scale_number: int) -> np.ndarray:
 ##################################################################################################
 
 # Define the image prefix used to name the files
-image_prefix = "IMAGE_PREFIX"  # ADAPT HERE
+image_prefix = "LADAF-2021-17-left-v7_processed"  # ADAPT HERE
 
 # Example: define scales and their valid ranges
 scale_ranges_manual = {
-    0: (1, 5),
-    -1: (5, 12),
-    -2: (12, 30),
-    -3: (30, 150),
+    -1: (1, 10),
+    -3: (10, 150),
 }  # ADAPT HERE
 
 
 # Load the initial image (here: label)
-lung_image = da.from_zarr(f"data/{image_prefix}.zarr")  # ADAPT HERE
+lung_image = da.from_zarr(f"/data/{image_prefix}.zarr")  # ADAPT HERE
 lung_image = lung_image.rechunk((96, 96, 96))
 
 

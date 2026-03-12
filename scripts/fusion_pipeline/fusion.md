@@ -36,9 +36,18 @@ To get started with Euler for SkelePlex also see: [Running SkelePlex on ETH Eule
 Create a new virtual environment using these commands:
 1. Load module stack with pre-installed cuda: `module load stack/2024-06 cuda/12.8.0`
 2. Load module stack with pre-installed packages: `module load stack/2024-06 python/3.11.6`
-3. Create new virtual environment called skeleplexenv: `python -m venv --system-site-packages skeleplexenv`
+3. Create new virtual environment called skeleplexenv: `python -m venv skeleplexenv`
 4. Activate your new virtual environment called skeleplexenv: `source skeleplexenv/bin/activate`
-5. Install skeleplex and cuda into that virtual environment: `pip install ".[torch]" cupy-cuda12x"`
+5. Navigate to the skeleplex repo: `cd /path/to/skeleplex-v2`
+6. Install dask: `pip install "dask[array] <=2025.11.0"`
+7. Install skeleplex and cuda into that virtual environment: `pip install ".[torch]" cupy-cuda12x"`
+
+
+To load it with (adapt path to location for environment):
+
+```bash
+module load stack/2024-06 cuda/12.8.0 && module load stack/2024-06 python/3.11.6 &&  source skeleplexenv/bin/activate && cd /cluster/.../...
+```
 
 
 ## Submission Scripts
@@ -47,13 +56,15 @@ For each python file / job to submit, create a submission script (e.g., 1_fusion
 
 | job-name   | time      | cpus-per-task | mem-per-cpu    | gpu          |
 |------------|-----------|----------------|----------------|---------------|
-| 1_fusion   | 06:00:00  | 4              | 64 GB      | rtx_4090:4    |
+| 1_1_fusion | 03:00:00  | 4              | 20 GB      | rtx_4090:4    |
+| 1_2_fusion | 03:00:00  | 4              | 55 GB      | rtx_4090:4    |
+| 1_3_fusion | 06:00:00  | 4              | 25 GB      | rtx_4090:4    |
 | 2_1_fusion | 03:00:00  | 4              | 20 GB      | —             |
 | 2_2_fusion | 36:00:00  | 4              | 30 GB      | rtx_4090:4    |
 | 2_3_fusion | 36:00:00  | 4              | 30 GB      | rtx_4090:4    |
-| 2_4_fusion | 02:00:00  | 4              | 5 GB       | —             |
-| 3_1_fusion | 03:00:00  | 4              | 100 GB     | —             |
-| 3_2_fusion | 03:00:00  | 4              | 55 GB      | —             |
+| 2_4_fusion | 02:00:00  | 4              | 50 GB       | —             |
+| 2_5_fusion | 04:00:00  | 4              | 40 GB       | rtx_4090:4             |
+| 3_fusion | 24:00:00  | 4              | 55 GB     | rtx_4090:4           |
 
 To achieve correct processing on multiple scales, include `job-index` and `job-index-offset` variables. The `job-index` is defined by the numbers in the array submsssion of the jobs (see [Fusion II submissions](#fusion-ii)) and the `job-index-offset` is used to achieve the negative scale numbers. In the python scripts the scale number is defined as the subtraction of the `job-index-offset` from the `job-index`.  E.g., by submitting the jobs with the array 0-3 and setting the `job-index-offset` to 3, the scales -3, -2, -1 and 0 are achieved. Find an examplary job submission script for fusion part II below:
 
@@ -73,19 +84,20 @@ python 2_2_fusion.py --workers 4 --job-index $SLURM_ARRAY_TASK_ID --job-index-of
 echo "Job completed: $(date)"
 ```
 
-Fusion part III also requires specification of the `job-index`, it is used as a positional argument to access the different thresholds saved in the thresholds list (e.g, if the thresholds list contains 5 different thresholds submit the job as an array 0-4). For correct implementation, include `--job-index $SLURM_ARRAY_TASK_ID` in your submission script.
 
 ## Submitting Fusion Jobs on Euler
 To string the jobs together on Euler, submit them as dependencies by replaceing the capital letters `FUSION_X` with the respective Euler Job-ID.
 
 ### Fusion Part I
 
-`sbatch 1_fusion_submission.sh`
+`sbatch 1_1_fusion_submission.sh`
+`sbatch --dependency=afterok:FUSION1_2 1_2_fusion_submission.sh`
+`sbatch --dependency=afterok:FUSION1_2 1_3_fusion_submission.sh`
 
 ### Fusion Part II
 Jobs are submitted as arrays to process the different scales defined in the scales list.
 
-`sbatch --dependency=afterok:FUSION1 --array=0-3 2_1_fusion_submission.sh`
+`sbatch --dependency=afterok:FUSION1_3 --array=0-3 2_1_fusion_submission.sh`
 
 `sbatch --dependency=afterok:FUSION2_1 --array=0-3 2_2_fusion_submission.sh`
 
@@ -93,11 +105,12 @@ Jobs are submitted as arrays to process the different scales defined in the scal
 
 `sbatch --dependency=afterok:FUSION2_3 --array=0-3 2_4_fusion_submission.sh`
 
+`sbatch --dependency=afterok:FUSION2_4 --array=0-3 2_5_fusion_submission.sh`
+
 
 ### Fusion Part III
 Fusion 3.2 is submitted as an array to process different thresholds for the binary skeleton generation. Adapt the submitted array according to the number of thresholds you have specified in `3_2_fusion.py`.
 
-`sbatch --dependency=afterok:FUSION2_4 3_1_fusion_submission.sh`
+`sbatch --dependency=afterok:FUSION2_5 3_fusion_submission.sh`
 
-`sbatch --dependency=afterok:FUSION3_1 --array=0-4 3_2_fusion_submission.sh`
 
