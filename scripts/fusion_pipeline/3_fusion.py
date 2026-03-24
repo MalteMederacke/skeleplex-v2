@@ -7,13 +7,16 @@ import time
 
 import dask.array as da
 import numpy as np
+from skimage.morphology import skeletonize as sk_skeletonize
+
+from skeleplex.skeleton import repair_breaks_lazy
 
 ##################################################################################################
 #                                           FUNCTIONS
 ##################################################################################################
 
 
-def optimal_tree_generator(
+def fused_tree_generator(
     scale_map: np.ndarray,
     image: np.ndarray,
     scale_ranges: dict,
@@ -48,20 +51,21 @@ def optimal_tree_generator(
         scale mapped values.
 
     """
-    optimal_tree = da.zeros_like(image, dtype=image.dtype)
+    fused_tree = da.zeros_like(image, dtype=image.dtype)
 
     for key in scale_ranges.keys():
         scale_number = key
+        print("Processing scale number: ", scale_number)
 
         mask = scale_map == scale_number
         name = f"{image_prefix}_image_skeletonized_rescaled_from_{scale_number}"
         print(name)
 
         scaled_images_dict[name] = scaled_images_dict[name].rechunk(scale_map.chunks)
-        optimal_tree = da.where(mask, scaled_images_dict[name], optimal_tree)
+        fused_tree = da.where(mask, scaled_images_dict[name], fused_tree)
 
-    optimal_tree.to_zarr(f"data/{image_prefix}_optimal_tree.zarr", overwrite=True)
-    return optimal_tree
+    fused_tree.to_zarr(f"/data/{image_prefix}_fused_tree.zarr", mode="w")
+    return fused_tree
 
 
 ##################################################################################################
@@ -69,19 +73,19 @@ def optimal_tree_generator(
 ##################################################################################################
 
 # Define the image prefix used to name the files
-image_prefix = "IMAGE_PREFIX"  # ADAPT HERE
+image_prefix = "LADAF-2021-17-left-v7_processed"  # ADAPT HERE
 
 # Example: define scales and their valid ranges
 scale_ranges_manual = {
-    0: (1, 5),
-    -1: (5, 12),
-    -2: (12, 30),
-    -3: (30, 150),
+    -1: (1, 10),
+    -3: (10, 150),
 }  # ADAPT HERE
 
+
 # Load the initial image (here: label)
-lung_image = da.from_zarr(f"data/{image_prefix}.zarr")  # ADAPT HERE
+lung_image = da.from_zarr(f"/data/{image_prefix}.zarr")  # ADAPT HERE
 lung_image = lung_image.rechunk((192, 192, 192))
+print("Lung image shape: ", lung_image.shape)
 
 
 ################ From fusion Part 1 ################
@@ -89,23 +93,61 @@ start_time1 = time.time()
 
 # Load Scale Map
 lung_image_scale_map = da.from_zarr(
-    f"data/{image_prefix}_image_scale_map.zarr/scale_original"
+    f"/data/{image_prefix}_image_scale_map_processed.zarr/scale_original"
 )
 lung_image_scale_map = lung_image_scale_map.rechunk((192, 192, 192))
+print("Lung image scale map shape: ", lung_image_scale_map.shape)
 
 
 ################ From fusion Part 2 ################
+
+
+def pad_to_match(Original_Image, rescaled_image, value=0):
+    """Pad rescaled image to match the shape of the original image.
+
+    Parameters
+    ----------
+    Original_Image : np.ndarray
+        The original image that serves as the reference for padding.
+    rescaled_image : np.ndarray
+        The rescaled image that needs to be padded to match
+        the shape of the original image.
+    value : int, optional
+        The value to use for padding, by default 0.
+    """
+    if Original_Image.ndim != rescaled_image.ndim:
+        raise ValueError(
+            "Original_Image and rescaled_image must have the same number of dimensions"
+        )
+
+    pad_width = []
+    for a, b in zip(Original_Image.shape, rescaled_image.shape, strict=False):
+        diff = a - b
+        if diff < 0:
+            raise ValueError(
+                "rescaled_image must not be larger than Original_Image in any dimension"
+            )
+
+        before = diff // 2
+        after = diff - before
+        pad_width.append((before, after))
+
+    return da.pad(rescaled_image, pad_width, mode="constant", constant_values=value)
+
 
 # Load rescaled images to combine rescaled images via scale map
 multiscale_images = {}
 for key in scale_ranges_manual.keys():
     scale_number = key
     image = da.from_zarr(
-        f"data/{image_prefix}_skeletonized_rescaled.zarr/origin_scale{scale_number}"
+        f"/data/{image_prefix}_skeletonized_rescaled.zarr/origin_scale{scale_number}"
     )
     image = image.rechunk((192, 192, 192))
     name = f"{image_prefix}_image_skeletonized_rescaled_from_{scale_number}"
     print(name)
+    print("Image shape: ", image.shape)
+    image = pad_to_match(lung_image, image, value=0)
+    print("Padded image shape: ", image.shape)
     multiscale_images[name] = image
 
 print(f"--- Loading all images took {time.time() - start_time1} seconds ---")
@@ -113,8 +155,43 @@ print(f"--- Loading all images took {time.time() - start_time1} seconds ---")
 ################ Fusion Part 3 ################
 start_time2 = time.time()
 # Combine resclaed images to one via scale map: generate optimal tree
-lung_image_optimum = optimal_tree_generator(
+lung_image_optimum = fused_tree_generator(
     lung_image_scale_map, lung_image, scale_ranges_manual, multiscale_images
 )
 lung_image_optimum = lung_image_optimum.rechunk((192, 192, 192))
 print(f"--- Generating optimal tree took {time.time() - start_time2} seconds ---")
+
+
+# Load Optimal Tree
+lung_image_optimum = da.from_zarr(f"/data/{image_prefix}_fused_tree.zarr")
+
+
+# Repair breaks in the final skeleton
+start_time5 = time.time()
+lung_image_repaired = repair_breaks_lazy(
+    skeleton_path=f"/data/{image_prefix}_fused_tree.zarr",
+    segmentation_path=f"/data/{image_prefix}.zarr",
+    output_path=f"/data/{image_prefix}_final_skeletonzarr",
+    repair_radius=40,
+    chunk_shape=(256, 256, 256),
+    backend="cupy",
+)
+
+# print( f"--- Repairing breaks in final
+# skeleton took {time.time() - start_time5} seconds ---")
+
+
+# perform thinning / skeletonizing on the repaired skeleton
+start_time6 = time.time()
+lung_image_repaired = da.from_zarr(f"/data/{image_prefix}_final_skeleton.zarr")
+lung_image_repaired = lung_image_repaired.rechunk((192, 192, 192))
+lung_image_skeletonized_final = lung_image_repaired.map_overlap(
+    sk_skeletonize, depth=10, boundary=0, dtype=lung_image_repaired.dtype
+)
+
+lung_image_skeletonized_final.to_zarr(
+    f"/data/{image_prefix}_final_skeleton_skeletonized.zarr", mode="w"
+)
+# print(f"--- Skeletonizing final skeleton
+#  took {time.time() - start_time6} seconds ---")
+print("Finished Fusion Part 3: Generated Fused Tree and final skeleton.")

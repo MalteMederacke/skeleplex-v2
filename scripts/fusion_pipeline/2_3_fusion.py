@@ -6,12 +6,11 @@
 import argparse
 import copy
 import gc
-import itertools
 import time
 import uuid
+import warnings
 from typing import Literal
 
-import dask
 import dask.array as da
 import numpy as np
 import torch
@@ -20,7 +19,16 @@ from morphospaces.networks.multiscale_skeletonization import (
     MultiscaleSkeletonizationNet,
 )
 
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    from monai.inferers import SlidingWindowInfererAdapt
+
+from functools import partial
+
+from morphospaces.networks.skeletonization import SkeletonizationRegressionDynUNet
+
 from skeleplex.skeleton._utils import get_skeletonization_model, make_image_5d
+from skeleplex.utils._chunked import iteratively_process_chunks_3d
 
 ##################################################################################################
 #                                           FUNCTIONS
@@ -30,6 +38,11 @@ from skeleplex.skeleton._utils import get_skeletonization_model, make_image_5d
 def skeletonize_for_dask_simplified(
     image: np.ndarray,
     model: Literal["pretrained"] | MultiscaleSkeletonizationNet = "pretrained",
+    roi_size: tuple[int, int, int] = (96, 96, 96),
+    overlap: float = 0.5,
+    stitching_mode: str = "gaussian",
+    progress_bar: bool = True,
+    batch_size: int = 1,
 ) -> np.ndarray:
     """Skeletonize a normalized distance field image.
 
@@ -43,14 +56,33 @@ def skeletonize_for_dask_simplified(
         MultiscaleSkeletonizationNet or the string "pretrained". If "pretrained",
         a pretrained model will be downloaded from the SkelePlex repository and used.
         Default value is "pretrained".
+    roi_size : tuple[int, int, int]
+        The size of each tile to predict on.
+        The default value is (120, 120, 120).
+    overlap : float
+        The amount of overlap between tiles.
+        Should be between 0 and 1.
+        Default value is 0.5.
+    stitching_mode : str
+        The method to use to stitch overlapping tiles.
+        Should be "gaussian" or "constant".
+        "gaussian" uses a Gaussian kernel to weight the overlapping regions.
+        "constant" uses equal weight across overlapping regions.
+        "gaussian" is the default.
+    progress_bar : bool
+        Displays a progress bar during the prediction when set to True.
+        Default is True.
+    batch_size : int
+        The number of tiles to predict at once.
+        Default value is 1.
     """
-    if "result_numpy" in locals():
-        result_numpy = None
-        del result_numpy
+    """ if "skel_pred" in locals():
+        skel_pred = None
+        del skel_pred
         gc.collect()
-        torch.cuda.empty_cache()
+        torch.cuda.empty_cache()"""
 
-    start_time = time.time()
+    # start_time = time.time()
     worker_id = str(uuid.uuid4())
     # add dim -> NCZYX
     expanded_image = torch.from_numpy(make_image_5d(image))
@@ -61,34 +93,46 @@ def skeletonize_for_dask_simplified(
 
     # put the model in eval mode
     model.eval()
+    print("Model: ", model)
+    # inferer = SimpleInferer()
+    inferer = SlidingWindowInfererAdapt(
+        roi_size=roi_size,
+        sw_device=torch.device("cuda"),
+        sw_batch_size=batch_size,
+        overlap=overlap,
+        mode=stitching_mode,
+        progress=progress_bar,
+    )
 
     # make the prediction
     with torch.no_grad():
-        result = model(expanded_image.cuda())
+        result = inferer(inputs=expanded_image, network=model)
+
+    # squeeze dims -> ZYX
+    result_cpu = result.cpu()
+    del result
 
     # add the code to squeeze the extra dims and convert to numpy here
     # squeeze dims -> ZYX
-    skel_pred_torch = torch.squeeze(torch.squeeze(result, dim=0), dim=0)
+    skel_pred_torch = torch.squeeze(torch.squeeze(result_cpu, dim=0), dim=0).numpy()
     skel_pred = copy.deepcopy(skel_pred_torch)
-    result_numpy = skel_pred.numpy(force=True)
-    print(f"--- Skeleton Prediction for this chunk took {time.time()
-                                                         - start_time} seconds ---")
+    # print(f"--- Skeleton Prediction for this chunk
+    #  took {time.time() - start_time} seconds ---")
     print(
-        f"--- Worker: {worker_id}, Allocated Memory: {
-            torch.cuda.memory_allocated(0)}"
+        f"--- Worker: {worker_id}, Allocated Memory: {torch.cuda.memory_allocated(0)}"
     )
-    # add the mode to clear the memory, e.g., delete the variables, clear cache, etc.
-    start_time = time.time()
-    del result, model, expanded_image, skel_pred_torch, skel_pred
+
+    # clear memory
+    # start_time = time.time()
+    del model, expanded_image, skel_pred_torch
     gc.collect()
     torch.cuda.empty_cache()
-    print(f"-- Deleting result and model, empty cache took {time.time()
-                                                             - start_time} seconds --")
+    # print(f"-- Deleting result and model,
+    # empty cache took {time.time() - start_time} seconds --" )
     print(
-        f"--- Worker: {worker_id}, Allocated Memory: {
-            torch.cuda.memory_allocated(0)}"
+        f"--- Worker: {worker_id}, Allocated Memory: {torch.cuda.memory_allocated(0)}"
     )
-    return result_numpy
+    return skel_pred
 
 
 ##################################################################################################
@@ -96,13 +140,11 @@ def skeletonize_for_dask_simplified(
 ##################################################################################################
 
 # Define the image prefix used to name the files
-image_prefix = "IMAGE_PREFIX"  # ADAPT HERE
+image_prefix = "LADAF-2021-17-left-v7_processed"  # ADAPT HERE
 
 scale_ranges_manual = {
-    0: (1, 5),
-    -1: (5, 12),
-    -2: (12, 30),
-    -3: (30, 150),
+    -1: (1, 10),
+    -3: (10, 150),
 }  # ADAPT HERE
 
 ################ Fusion Part 2.3 ################
@@ -112,8 +154,8 @@ parser.add_argument(
 )
 parser.add_argument(
     "--job-index-offset",
-    help="this number assists in getting the negative and positive scales "
-    "required for the fusion algorithm (submit a positive integer)",
+    help="this number assists in getting the negative "
+    "and positive scales required for the fusion algorithm (submit a positive integer)",
     type=int,
 )
 parser.add_argument("--workers", help="this sets the number of workers", type=int)
@@ -129,51 +171,45 @@ print("Scale number: ", scale_number)
 
 # Load scaled distance images form zarr to Predict Skeleton on all scaled images
 dist_image = da.from_zarr(
-    f"data/{image_prefix}_distance_field_on_scales.zarr/scale{scale_number}"
+    f"/data/{image_prefix}_distance_field_on_scales.zarr/scale{scale_number}_maxball_2"
 )
 dist_image = dist_image.rechunk((192, 192, 192))
 
 
 # Predict Skeleton on all scaled images
 start_time = time.time()
-with dask.config.set(num_workers=args.workers):
-    # Zarr store
-    save_here = zarr.open(
-        f"data/{image_prefix}_skeleton_predictions_on_scales.zarr/scale{scale_number}",
-        mode="w",
-        shape=dist_image.shape,
-        chunks=dist_image.chunks,
-        dtype=dist_image.dtype,
-    )
+# load the new model here
+path_to_checkpoint = "reg-best.ckpt"
+model = SkeletonizationRegressionDynUNet.load_from_checkpoint(path_to_checkpoint)
 
-    for inds in itertools.product(*map(range, dist_image.blocks.shape)):
-        chunk = dist_image.blocks[inds]
-        chunk_mem = chunk.compute()
-        dask_arr_chunk = skeletonize_for_dask_simplified(chunk_mem)
+partial_skeltonize = partial(skeletonize_for_dask_simplified, model=model)
 
-        region = tuple(
-            slice(
-                inds[dim] * dist_image.chunks[dim][0],
-                inds[dim] * dist_image.chunks[dim][0] + dask_arr_chunk.shape[dim],
-            )
-            for dim in range(dist_image.ndim)
-        )
 
-        # save as zarr
-        save_here[region] = dask_arr_chunk
-        del dask_arr_chunk
-        del region
-        del chunk
-        del chunk_mem
-        gc.collect()
+save_here = zarr.open(
+    f"/data/{image_prefix}_skeleton_predictions_on_scales.zarr/scale{scale_number}",
+    mode="w",
+    shape=dist_image.shape,
+    chunks=dist_image.chunks,
+    dtype=dist_image.dtype,
+)
 
-    group = zarr.open_group(
-        f"data/{image_prefix}_skeleton_predictions_on_scales.zarr", mode="a"
-    )
-    scale_factor = 2**scale_number
-    group[f"scale{scale_number}"].attrs["scale"] = [
-        scale_factor,
-        scale_factor,
-        scale_factor,
-    ]
+iteratively_process_chunks_3d(
+    input_array=dist_image,
+    output_zarr=save_here,
+    function_to_apply=partial_skeltonize,
+    chunk_shape=(192, 192, 192),
+    extra_border=(60, 60, 60),
+)
+
+
+"""group = zarr.open_group(
+    f"/data/{image_prefix}_skeleton_predictions_on_scales.zarr", mode="a"
+)
+scale_factor = 2**scale_number
+group[f"scale{scale_number}"].attrs["scale"] = [
+    scale_factor,
+    scale_factor,
+    scale_factor,
+]"""
+
 print(f"--- Skeleton Prediction took {time.time() - start_time} seconds ---")
