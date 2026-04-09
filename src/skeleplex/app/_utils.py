@@ -83,42 +83,45 @@ def view_skeleton(
         start_qt_loop_ipython()
 
     if launch_widgets:
-        undo_widget = magicgui(viewer.curate.undo)
-        delete_edge_widget = magicgui(
-            viewer.curate.delete_edge,
-        )
-        render_around_node_widget = magicgui(
-            viewer.curate.render_around_node,
-            node_id={
-                "widget_type": "LineEdit",
-            },
-            bounding_box_width={"min": 0, "max": sys.float_info.max},
-        )
+        try:
+            undo_widget = magicgui(viewer.curate.undo)
+            delete_edge_widget = magicgui(
+                viewer.curate.delete_edge,
+            )
+            render_around_node_widget = magicgui(
+                viewer.curate.render_around_node,
+                node_id={
+                    "widget_type": "LineEdit",
+                },
+                bounding_box_width={"min": 0, "max": sys.float_info.max},
+            )
 
-        connect_without_merging_widget = magicgui(
-            viewer.curate.connect_without_merging,
-        )
-        connect_with_merging_widget = magicgui(
-            viewer.curate.connect_with_merging,
-        )
-        split_edge_widget = make_split_edge_widget(viewer)
+            connect_without_merging_widget = magicgui(
+                viewer.curate.connect_without_merging,
+            )
+            connect_with_merging_widget = magicgui(
+                viewer.curate.connect_with_merging,
+            )
+            split_edge_widget = make_split_edge_widget(viewer)
 
-        ChangeBranchColorWidget(viewer)
+            ChangeBranchColorWidget(viewer)
 
-        # add to viewer
-        viewer.add_auxiliary_widget(undo_widget.native, name="Undo")
-        viewer.add_auxiliary_widget(delete_edge_widget.native, name="Delete edge")
-        viewer.add_auxiliary_widget(
-            render_around_node_widget.native, name="Render around node"
-        )
-        viewer.add_auxiliary_widget(
-            connect_without_merging_widget.native, name="Connect without merging"
-        )
-        viewer.add_auxiliary_widget(
-            connect_with_merging_widget.native, name="Connect with merging"
-        )
-        viewer.add_auxiliary_widget(split_edge_widget.native, name="Split edge")
-    return viewer
+            # add to viewer
+            viewer.add_auxiliary_widget(undo_widget.native, name="Undo")
+            viewer.add_auxiliary_widget(delete_edge_widget.native, name="Delete edge")
+            viewer.add_auxiliary_widget(
+                render_around_node_widget.native, name="Render around node"
+            )
+            viewer.add_auxiliary_widget(
+                connect_without_merging_widget.native, name="Connect without merging"
+            )
+            viewer.add_auxiliary_widget(
+                connect_with_merging_widget.native, name="Connect with merging"
+            )
+            viewer.add_auxiliary_widget(split_edge_widget.native, name="Split edge")
+        except Exception as e:
+            print(f"Error launching widgets: {e}")
+        return viewer
 
 
 def start_qt_loop_ipython():

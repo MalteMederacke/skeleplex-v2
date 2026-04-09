@@ -486,7 +486,7 @@ def make_split_edge_widget(viewer):
         point_pos = spline.eval(split_edge_widget.split_pos.value)
 
         split_edge_widget.point_store.coordinates = np.array(
-            [point_pos], dtype=np.float32
+            [point_pos[::-1]], dtype=np.float32
         )
         split_edge_widget.point_visual.appearance.visible = True
         viewer._viewer._backend.reslice_all()
@@ -592,15 +592,16 @@ class ChangeBranchColorWidget:
         return list(attribute_set)
 
     def get_min_max_values(self, edge_attribute: str):
-        """Get the min and max values of the specified edge attribute."""
         values = [
             value
             for _, value in nx.get_edge_attributes(
                 self.viewer.data.skeleton_graph.graph, edge_attribute
             ).items()
-            if isinstance(value, numbers.Number)
+            if isinstance(value, numbers.Number) and not np.isnan(value)
         ]
-        return np.nanmin(values), np.nanmax(values)
+        if not values:
+            return 0,0
+        return min(values), max(values)
 
     def _on_run_clicked(self):
         """Apply coloring."""
