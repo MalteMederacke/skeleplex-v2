@@ -506,6 +506,7 @@ def add_file_to_graph(file):
         with h5py.File(file, "r") as f:
             image_slices = f["image"][:]
             segmentation_slices = f["segmentation"][:]
+            pixel_spacing_um = float(f.attrs.get("sample_grid_spacing_um", 1.0))
     except Exception as e:
         logger.warning(f"Error loading {file}: {e}")
         return None
@@ -576,19 +577,25 @@ def add_file_to_graph(file):
                 tissue_radius_branch.append(minor_axis / 2)
                 lumen_radius_branch.append(0)
 
+    lumen_diameter = np.array(lumen_radius_branch) * 2 * pixel_spacing_um
+    tissue_thickness = np.array(tissue_radius_branch) * pixel_spacing_um
+    total_area = np.array(total_area_branch) * pixel_spacing_um**2
+    minor_axis = np.array(minor_axis_branch) * pixel_spacing_um
+    major_axis = np.array(major_axis_branch) * pixel_spacing_um
+
     return (
         start_node,
         end_node,
-        np.mean(np.array(lumen_radius_branch) * 2),
-        np.std(np.array(lumen_radius_branch) * 2),
-        np.mean(tissue_radius_branch),
-        np.std(tissue_radius_branch),
-        np.mean(total_area_branch),
-        np.std(total_area_branch),
-        np.mean(minor_axis_branch),
-        np.std(minor_axis_branch),
-        np.mean(major_axis_branch),
-        np.std(major_axis_branch),
+        np.mean(lumen_diameter),
+        np.std(lumen_diameter),
+        np.mean(tissue_thickness),
+        np.std(tissue_thickness),
+        np.mean(total_area),
+        np.std(total_area),
+        np.mean(minor_axis),
+        np.std(minor_axis),
+        np.mean(major_axis),
+        np.std(major_axis),
     )
 
 

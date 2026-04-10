@@ -15,6 +15,7 @@ def write_slices_to_h5(
     segmentation_slices: dict | None = None,
     image_key: str = "image",
     segmentation_key: str = "segmentation",
+    sample_grid_spacing_um: float | None = None,
 ):
     """
     Write image and segmentation slices to an h5 file.
@@ -35,6 +36,9 @@ def write_slices_to_h5(
         The key to use for the image slices.
     segmentation_key : str
         The key to use for the segmentation slices.
+    sample_grid_spacing_um : float, optional
+        The pixel spacing in micrometers. Stored as a file attribute so that
+        downstream measurement functions can convert pixel units to µm.
     """
     if not os.path.exists(file_path):
         os.makedirs(file_path)
@@ -47,6 +51,8 @@ def write_slices_to_h5(
             f.create_dataset(image_key, data=image_slices[edge])
             if segmentation_slices is not None:
                 f.create_dataset(segmentation_key, data=segmentation_slices[edge])
+            if sample_grid_spacing_um is not None:
+                f.attrs["sample_grid_spacing_um"] = sample_grid_spacing_um
 
 
 def select_points_in_bounding_box(
