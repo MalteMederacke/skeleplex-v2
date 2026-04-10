@@ -118,6 +118,10 @@ def make_graph_directed(graph: nx.Graph, origin: int) -> nx.DiGraph:
     if isinstance(graph, nx.DiGraph):
         logger.info("The input graph is already a directed graph.")
         return graph
+    if isinstance(graph, nx.MultiGraph):
+        logger.info("The input graph is a multi-graph." \
+        "Converting to a simple graph first.")
+        graph = nx.Graph(graph)
     if len(list(nx.connected_components(graph))) > 1:
         logger.warning("""
         The input graph is not connected.
@@ -146,6 +150,8 @@ def make_graph_directed(graph: nx.Graph, origin: int) -> nx.DiGraph:
             di_fragment = nx.DiGraph()
             for u, v in nx.bfs_edges(fragment_subgraph, origin):
                 di_fragment.add_edge(u, v, **fragment_subgraph[u][v])
+                di_fragment.add_node(u, **fragment_subgraph.nodes[u])
+                di_fragment.add_node(v, **fragment_subgraph.nodes[v])
             di_graph.add_edges_from(di_fragment.edges(data=True))
             di_graph.add_nodes_from(di_fragment.nodes(data=True))
 

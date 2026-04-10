@@ -33,7 +33,11 @@ def grey2rgb(image):
         A 2D numpy array representing the grayscale image.
     """
     image = np.stack([image] * 3, axis=-1)
-    image = (image - image.min()) / (image.max() - image.min()) * 255
+    rng = image.max() - image.min()
+    if rng > 0:
+        image = (image - image.min()) / rng * 255
+    else:
+        image = np.zeros_like(image)
     return image.astype(np.uint8)
 
 

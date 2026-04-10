@@ -199,7 +199,7 @@ def compute_level(graph: nx.DiGraph, origin: int):
         if nx.has_path(graph, origin, node):
             level = nx.shortest_path_length(graph, origin, node)
         else:
-            level = -1
+            level = np.nan
         level_dir[node] = level
     nx.set_node_attributes(graph, level_dir, GENERATION_KEY)
 

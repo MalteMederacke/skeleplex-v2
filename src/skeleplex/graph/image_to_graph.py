@@ -55,7 +55,7 @@ def image_to_graph_skan(
         # todo: factor our to spline module
         # todo: reconsider how the number of knots is set
         spline_path = skeleton.path_coordinates(index)
-        spline_path *= image_voxel_size_um  # scale to um
+        spline_path = spline_path * image_voxel_size_um  # scale to um
         n_points = len(spline_path)
         if n_points <= max_spline_knots:
             n_spline_knots = n_points - 1
@@ -82,7 +82,7 @@ def image_to_graph_skan(
     new_node_data = {}
     for node_index, node_data in skeleton_graph.nodes(data=True):
         node_coordinate = np.asarray(skeleton.coordinates[node_index])
-        node_coordinate *= image_voxel_size_um  # scale to um
+        node_coordinate = node_coordinate * image_voxel_size_um  # scale to um
         node_data[NODE_COORDINATE_KEY] = node_coordinate
         new_node_data[node_index] = node_data
 

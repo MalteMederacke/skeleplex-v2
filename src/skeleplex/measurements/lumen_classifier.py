@@ -12,12 +12,10 @@ import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torchmetrics.classification import Accuracy
-from torchvision import models
+from torchvision.models import ConvNeXt_Tiny_Weights, convnext_tiny
 
-from monai.transforms import EnsureType
 from PIL import Image
 from qtpy.QtWidgets import QFileDialog, QLabel, QPushButton, QVBoxLayout, QWidget
-from torchvision.models import ResNet50_Weights
 
 
 from torchvision.transforms import (
@@ -41,210 +39,217 @@ logger.setLevel(logging.INFO)
 
 
 class SaveClassifiedSlices(QWidget):
-    """Widget to save classified slices in different folders.
+    """Widget to sort SAM-labelled slices into lumen / branch / bad folders.
 
-    Specifically designed to classify sam segmentations from orthogonal branch
-    sections into:
-     -Lumen
-     -Branch
-     -Bad
-    The bad category is for all other labels that are not the lumen or branch.
+    Point it at a directory of .h5 files (each with ``image`` and
+    ``segmentation`` datasets, as produced by ``generate_sam_training_data``).
+    The widget loads each file in turn, stepping through slices one by one.
+    After every save the viewer advances to the next slice; when the last
+    slice of a file is saved the next file is loaded automatically.
 
-    Load the images that you want to classify and the relevant segmentation in a
-    napari viewer. The image layer should end with .h5_img and the segmentation layer
-    with .h5_sam. The image and segmentation should be in the same folder.
-
-    The Lumen should be labelled as 2, the Branch as 1.
-
-    The save button bad_lumen will crop the image to the bounding box of the lumen,
-    while the save button bad will crop the image to the bounding box of the all de-
-    tected labels.
-
+    Parameters
+    ----------
+    viewer : napari.Viewer
+    input_dir : str
+        Directory containing .h5 source files.
     """
 
-    def __init__(self, viewer):
+    _IMAGE_LAYER = "image"
+    _SEG_LAYER = "segmentation"
+
+    def __init__(self, viewer, input_dir):
         super().__init__()
         self.viewer = viewer
-        self.setWindowTitle("Save Segmentation")
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
+        self.input_dir = input_dir
+        self.files = sorted(f for f in os.listdir(input_dir) if f.endswith(".h5"))
+        self.current_file_idx = 0
 
-        # Initialize save paths
+        self.setWindowTitle("Sort Slices")
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+
+        # Progress label
+        self.progress_label = QLabel()
+        layout.addWidget(self.progress_label)
+
+        # Output path selectors
         self.lumen_path = ""
         self.branch_path = ""
         self.bad_path = ""
+        for label, cb in [
+            ("Lumen", self.set_lumen_path),
+            ("Branch", self.set_branch_path),
+            ("Bad", self.set_bad_path),
+        ]:
+            btn = QPushButton(f"Set {label} Save Path")
+            btn.clicked.connect(cb)
+            layout.addWidget(btn)
+            lbl = QLabel(f"{label} path: not set")
+            setattr(self, f"_{label.lower()}_path_label", lbl)
+            layout.addWidget(lbl)
 
-        # Path selectors + display
-        self._add_path_selector("Lumen", self.set_lumen_path)
-        self._add_path_selector("Branch", self.set_branch_path)
-        self._add_path_selector("Bad", self.set_bad_path)
+        # Save buttons
+        for label, cb in [
+            ("Save as Lumen", self.save_lumen_segmentation),
+            ("Save as Branch", self.save_branch_segmentation),
+            ("Save as Bad", self.save_bad_segmentation),
+            ("Save as Bad Lumen", self.save_bad_lumen),
+            ("Skip", self._advance),
+        ]:
+            btn = QPushButton(label)
+            btn.clicked.connect(cb)
+            layout.addWidget(btn)
 
-        # Category save buttons
-        self._add_save_button("Save as Lumen", self.save_lumen_segmentation)
-        self._add_save_button("Save as Branch", self.save_branch_segmentation)
-        self._add_save_button("Save as Bad", self.save_bad_segmentation)
-        self._add_save_button("Save as Bad Lumen", self.save_bad_lumen)
+        if self.files:
+            self._load_current_file()
+        else:
+            logger.warning("No .h5 files found in %s", input_dir)
 
-    def _add_path_selector(self, label, callback):
-        btn = QPushButton(f"Set {label} Save Path")
-        btn.clicked.connect(callback)
-        self.layout.addWidget(btn)
-
-        lbl = QLabel(f"{label} Path: Not set")
-        setattr(self, f"{label.lower().replace('/', '_')}_label", lbl)
-        self.layout.addWidget(lbl)
-
-    def _add_save_button(self, label, callback):
-        """Add a button to save the segmentation."""
-        btn = QPushButton(label)
-        btn.clicked.connect(callback)
-        self.layout.addWidget(btn)
+    # ------------------------------------------------------------------
+    # Path setters
+    # ------------------------------------------------------------------
 
     def set_lumen_path(self):
-        """Set the path for lumen save directory."""
         path = QFileDialog.getExistingDirectory(self, "Select Lumen Save Directory")
         if path:
-            self.lumen_path = path + "/"
-            self.lumen_label.setText(f"Lumen Path: {path}")
+            self.lumen_path = path
+            self._lumen_path_label.setText(f"Lumen path: {path}")
 
     def set_branch_path(self):
-        """Set the path for branch save directory."""
         path = QFileDialog.getExistingDirectory(self, "Select Branch Save Directory")
         if path:
-            self.branch_path = path + "/"
-            self.branch_label.setText(f"Branch Path: {path}")
+            self.branch_path = path
+            self._branch_path_label.setText(f"Branch path: {path}")
 
     def set_bad_path(self):
-        """Set the path for bad save directory."""
         path = QFileDialog.getExistingDirectory(self, "Select Bad Save Directory")
         if path:
-            self.bad_path = path + "/"
-            self.bad_label.setText(f"Bad/Bad Lumen Path: {path}")
+            self.bad_path = path
+            self._bad_path_label.setText(f"Bad path: {path}")
 
-    def return_layer(self, path):
-        """Return the image and label layer based on the active layer name."""
-        current_layer_name = self.viewer.layers.selection.active.name
-        name = current_layer_name[:-4]
+    # ------------------------------------------------------------------
+    # File loading
+    # ------------------------------------------------------------------
 
-        if current_layer_name.endswith("img"):
-            image_name = current_layer_name
-            label_name = name + "_sam"
-        elif current_layer_name.endswith("sam"):
-            label_name = current_layer_name
-            image_name = name + "_img"
-        else:
-            raise ValueError("Active layer must end with 'img' or 'sam'")
+    def _load_current_file(self):
+        """Load the current file into the viewer, replacing existing layers."""
+        file = self.files[self.current_file_idx]
+        path = os.path.join(self.input_dir, file)
+        logger.info("Loading %s", path)
 
-        image = self.viewer.layers[image_name].data
-        label = self.viewer.layers[label_name].data
-        current_step = self.viewer.dims.current_step[0]
+        with h5py.File(path, "r") as f:
+            image = f["image"][:]
+            seg = f["segmentation"][:]
 
-        return (
-            image[current_step],
-            label[current_step],
-            name[:-3] + f"_{current_step}.h5",
+        # Replace layers (remove old ones first)
+        for name in (self._IMAGE_LAYER, self._SEG_LAYER):
+            if name in [l.name for l in self.viewer.layers]:
+                self.viewer.layers.remove(name)
+
+        self.viewer.add_image(image, name=self._IMAGE_LAYER)
+        self.viewer.add_labels(seg, name=self._SEG_LAYER)
+        self.viewer.dims.current_step = (0,) + self.viewer.dims.current_step[1:]
+
+        n = len(self.files)
+        self.progress_label.setText(
+            f"File {self.current_file_idx + 1}/{n}: {file}  "
+            f"({len(image)} slices)"
         )
 
+    # ------------------------------------------------------------------
+    # Current slice access
+    # ------------------------------------------------------------------
+
+    def _current_slice(self):
+        """Return (image_slice, seg_slice, output_filename)."""
+        step = self.viewer.dims.current_step[0]
+        image = self.viewer.layers[self._IMAGE_LAYER].data
+        seg = self.viewer.layers[self._SEG_LAYER].data
+        stem = os.path.splitext(self.files[self.current_file_idx])[0]
+        name = f"{stem}_slice{step}.h5"
+        return image[step], seg[step], name
+
+    # ------------------------------------------------------------------
+    # Save helpers
+    # ------------------------------------------------------------------
+
+    def _save_slice(self, save_dir, image_masked, label):
+        """Crop to bounding box and write to save_dir."""
+        _, _, name = self._current_slice()
+        props = ski.measure.regionprops(ski.measure.label(label != 0))
+        if props:
+            minr, minc, maxr, maxc = props[0].bbox
+            image_masked = image_masked[minr:maxr, minc:maxc]
+            label = label[minr:maxr, minc:maxc]
+        out = os.path.join(save_dir, name)
+        with h5py.File(out, "w") as f:
+            f.create_dataset("image", data=image_masked)
+            f.create_dataset("label", data=label)
+        logger.info("Saved → %s", out)
+
     def save_lumen_segmentation(self):
-        """Save as lumen segmentation."""
         if not self.lumen_path:
             logger.info("Lumen path not set!")
             return
-        logger.info("Saving as lumen segmentation...")
-        image, label, name = self.return_layer(self.lumen_path)
-        lumen_label = label.copy()
-        lumen_label[lumen_label != 2] = 0
-        image_masked = image.copy()
-        image_masked[lumen_label != 2] = 0
-
-        props = ski.measure.regionprops(ski.measure.label(lumen_label))
-        if props:
-            minr, minc, maxr, maxc = props[0].bbox
-            image_masked = image_masked[minr:maxr, minc:maxc]
-            lumen_label = lumen_label[minr:maxr, minc:maxc]
-
-        with h5py.File(self.lumen_path + name, "w") as f:
-            f.create_dataset("image", data=image_masked)
-            f.create_dataset("label", data=lumen_label)
-
-        self._next_slice()
+        image, label, _ = self._current_slice()
+        lumen = label.copy()
+        lumen[lumen != 1] = 0
+        masked = image.copy()
+        masked[lumen == 0] = 0
+        self._save_slice(self.lumen_path, masked, lumen)
+        self._advance()
 
     def save_branch_segmentation(self):
-        """Save as branch segmentation."""
         if not self.branch_path:
             logger.info("Branch path not set!")
             return
-        logger.info("Saving as branch segmentation...")
-        image, label, name = self.return_layer(self.branch_path)
-        branch_label = label.copy()
-        branch_label[branch_label != 1] = 0
-        image_masked = image.copy()
-        image_masked[branch_label == 0] = 0
-
-        props = ski.measure.regionprops(ski.measure.label(branch_label))
-        if props:
-            minr, minc, maxr, maxc = props[0].bbox
-            image_masked = image_masked[minr:maxr, minc:maxc]
-            branch_label = branch_label[minr:maxr, minc:maxc]
-
-        with h5py.File(self.branch_path + name, "w") as f:
-            f.create_dataset("image", data=image_masked)
-            f.create_dataset("label", data=branch_label)
-
-        self._next_slice()
+        image, label, _ = self._current_slice()
+        branch = label.copy()
+        branch[branch != 1] = 0
+        masked = image.copy()
+        masked[branch == 0] = 0
+        self._save_slice(self.branch_path, masked, branch)
+        self._advance()
 
     def save_bad_segmentation(self):
-        """Save as bad segmentation."""
         if not self.bad_path:
             logger.info("Bad path not set!")
             return
-        logger.info("Saving as bad segmentation...")
-        image, label, name = self.return_layer(self.bad_path)
-        bad_label = (label != 0).astype(int)
-        image_masked = image * bad_label
-
-        props = ski.measure.regionprops(ski.measure.label(bad_label))
-        if props:
-            minr, minc, maxr, maxc = props[0].bbox
-            image_masked = image_masked[minr:maxr, minc:maxc]
-            bad_label = bad_label[minr:maxr, minc:maxc]
-
-        with h5py.File(self.bad_path + name, "w") as f:
-            f.create_dataset("image", data=image_masked)
-            f.create_dataset("label", data=bad_label)
-
-        self._next_slice()
+        image, label, _ = self._current_slice()
+        bad = (label != 0).astype(np.uint8)
+        masked = image * bad
+        self._save_slice(self.bad_path, masked, bad)
+        self._advance()
 
     def save_bad_lumen(self):
-        """Save the bad lumen segmentation."""
         if not self.bad_path:
             logger.info("Bad path not set!")
             return
-        logger.info("Saving as bad lumen...")
-        image, label, name = self.return_layer(self.bad_path)
-        bad_label = label.copy()
-        bad_label[bad_label != 2] = 0
-        image_masked = image.copy()
-        image_masked[bad_label != 2] = 0
+        image, label, _ = self._current_slice()
+        bad = label.copy()
+        bad[bad != 1] = 0
+        masked = image.copy()
+        masked[bad != 1] = 0
+        self._save_slice(self.bad_path, masked, bad)
+        self._advance()
 
-        props = ski.measure.regionprops(ski.measure.label(bad_label))
-        if props:
-            minr, minc, maxr, maxc = props[0].bbox
-            image_masked = image_masked[minr:maxr, minc:maxc]
-            bad_label = bad_label[minr:maxr, minc:maxc]
+    # ------------------------------------------------------------------
+    # Navigation
+    # ------------------------------------------------------------------
 
-        with h5py.File(self.bad_path + name, "w") as f:
-            f.create_dataset("image", data=image_masked)
-            f.create_dataset("label", data=bad_label)
+    def _advance(self):
+        """Move to next slice; load next file when current one is exhausted."""
+        n_slices = len(self.viewer.layers[self._IMAGE_LAYER].data)
+        next_step = self.viewer.dims.current_step[0] + 1
 
-        self._next_slice()
-
-    def _next_slice(self):
-        self.viewer.dims.current_step = (
-            self.viewer.dims.current_step[0] + 1,
-            self.viewer.dims.current_step[1],
-            self.viewer.dims.current_step[2],
-        )
+        if next_step < n_slices:
+            self.viewer.dims.current_step = (next_step,) + self.viewer.dims.current_step[1:]
+        else:
+            self.current_file_idx += 1
+            if self.current_file_idx < len(self.files):
+                self._load_current_file()
+            else:
+                logger.info("All files processed!")
 
 
 def add_class_based_on_folder_struct(lumen_path, branch_path, bad_path):
@@ -287,6 +292,144 @@ def add_class_based_on_folder_struct(lumen_path, branch_path, bad_path):
             class_count[2] += 1
     logger.info("Number of files per class:")
     logger.info(class_count)
+
+
+def generate_sam_training_data(
+    input_dir,
+    output_dir,
+    sam_checkpoint,
+    model_cfg="configs/sam2.1/sam2.1_hiera_l.yaml",
+    score_threshold=0.7,
+    device=None,
+):
+    """
+    Generate SAM2-labelled slices ready for sorting with SaveClassifiedSlices.
+
+    For each slice in every .h5 file in ``input_dir``, runs SAM2 with a
+    centre-point prompt (restricted to the segmentation bounding box when a
+    segmentation is present) and writes a new .h5 file containing:
+
+    - ``image``       : original greyscale slices  (N x H x W)
+    - ``segmentation``: integer label array         (N x H x W)
+                         0 = background
+                         1 = input binary segmentation (branch candidate)
+                         2 = SAM highest-scoring mask  (lumen candidate)
+
+    The outputs can be loaded into napari and sorted with
+    ``SaveClassifiedSlices``.
+
+    Parameters
+    ----------
+    input_dir : str
+        Folder of .h5 files with ``image`` (N x H x W) and ``segmentation``
+        (N x H x W, binary or integer) datasets.
+    output_dir : str
+        Destination folder (created if it does not exist).
+    sam_checkpoint : str
+        Path to the SAM2 checkpoint file (.pt).
+    model_cfg : str
+        SAM2 config path, e.g. ``"configs/sam2.1/sam2.1_hiera_l.yaml"``.
+    score_threshold : float
+        Minimum SAM quality score (0–1) for a mask to be considered. Among
+        masks that pass, the one with the lowest mean image intensity is chosen
+        — the lumen is air and therefore the darkest region in the slice.
+        If no mask passes, the highest-scoring mask is used as a fallback.
+        Default is 0.7.
+    device : str or None
+        Torch device string (``"cuda"`` / ``"cpu"``). Auto-detected if None.
+    """
+    try:
+        from sam2.build_sam import build_sam2
+        from sam2.sam2_image_predictor import SAM2ImagePredictor
+    except ImportError as e:
+        raise ImportError(
+            "sam2 is required for this function. "
+            "Install it from https://github.com/facebookresearch/segment-anything-2"
+        ) from e
+
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device(device)
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    sam2_model = build_sam2(model_cfg, sam_checkpoint, device=device)
+    predictor = SAM2ImagePredictor(sam2_model)
+
+    files = sorted(f for f in os.listdir(input_dir) if f.endswith(".h5"))
+    logger.info("Found %d files in %s", len(files), input_dir)
+
+    for file in files:
+        logger.info("Processing %s", file)
+        with h5py.File(os.path.join(input_dir, file), "r") as f:
+            image_slices = f["image"][:]
+            seg_slices = (f["segmentation"][:] != 0).astype(np.uint8)
+
+        n_slices = len(image_slices)
+        if n_slices == 0:
+            logger.warning("No slices found in %s, skipping.", file)
+            continue
+        out_seg = np.zeros((n_slices, *image_slices.shape[1:]), dtype=np.uint8)
+
+        for i in range(n_slices):
+            image_slice = image_slices[i]
+            seg_slice = seg_slices[i]
+
+            img_rgb = grey2rgb(image_slice)
+            predictor.set_image(img_rgb)
+
+            h, w = image_slice.shape
+
+            # Point prompt: centroid of segmentation, fallback to image centre.
+            # Box prompt: bounding box of segmentation when available.
+            box = None
+            if seg_slice.any():
+                # props = ski.measure.regionprops(ski.measure.label(seg_slice))
+                # if props:
+                #     cy, cx = props[0].centroid
+                #     # SAM uses (x, y) = (col, row) ordering
+                #     point = np.array([[cx, cy]])
+                #     minr, minc, maxr, maxc = props[0].bbox
+                #     box = np.array([[minc, minr, maxc, maxr]], dtype=float)
+                    
+                # else:
+                point = np.array([[w / 2, h / 2]])
+            else:
+                point = np.array([[w / 2, h / 2]])
+
+            masks, scores, _ = predictor.predict(
+                point_coords=point,
+                point_labels=np.array([1]),
+                box=box,
+                multimask_output=True,
+            )
+
+            # Lumen = air = darkest region in the slice.
+            # Among masks above the quality threshold, pick the one whose
+            # mean image intensity is lowest — this is more reliable than
+            # area or score alone, especially with noisy input segmentations.
+            # Fall back to highest-scoring mask if none pass the threshold.
+            above_threshold = scores >= score_threshold
+            if above_threshold.any():
+                candidate_masks = masks[above_threshold]
+                mean_intensities = np.array(
+                    [image_slice[m.astype(bool)].mean() for m in candidate_masks]
+                )
+                chosen = candidate_masks[np.argmin(mean_intensities)].astype(bool)
+            else:
+                chosen = masks[np.argmax(scores)].astype(bool)
+
+            label_slice = np.zeros((h, w), dtype=np.uint8)
+            label_slice[chosen] = 1
+
+            out_seg[i] = label_slice
+
+        out_path = os.path.join(output_dir, file)
+        with h5py.File(out_path, "w") as f:
+            f.create_dataset("image", data=image_slices)
+            f.create_dataset("segmentation", data=out_seg)
+
+        logger.info("Saved → %s", out_path)
 
 
 def split_and_copy_files(
@@ -342,27 +485,27 @@ class H5FileDataset(Dataset):
 
         self.transform = Compose(
             [
-                Resize(self.model_size),  # Resize to (96, 96)
-                ToTensor(),  # Convert to PyTorch tensor (scales [0,255] -> [0,1])
-                Normalize(
-                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-                ),  # ResNet normalization
-                # Data Augmentations
-                RandomApply(
-                    [
-                        ColorJitter(
-                            brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1
-                        )
-                    ],
-                    p=0.1,
-                ),
-                RandomApply([RandomRotation(degrees=10)], p=0.1),
-                RandomApply([RandomAffine(degrees=0, scale=(0.9, 1.1))], p=0.1),
+                Resize(self.model_size),
+                # Spatial augmentations on PIL image
                 RandomHorizontalFlip(p=0.5),
                 RandomVerticalFlip(p=0.5),
+                RandomApply([RandomRotation(degrees=15)], p=0.3),
+                RandomApply([RandomAffine(degrees=0, scale=(0.85, 1.15))], p=0.3),
                 RandomResizedCrop(
                     size=self.model_size, scale=(0.8, 1.0), ratio=(0.75, 1.333)
                 ),
+                # Color augmentations on PIL image
+                RandomApply(
+                    [
+                        ColorJitter(
+                            brightness=0.3, contrast=0.3, saturation=0.2, hue=0.1
+                        )
+                    ],
+                    p=0.4,
+                ),
+                # Normalize last, after ToTensor
+                ToTensor(),
+                Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]
         )
 
@@ -430,124 +573,103 @@ class H5DataModule(pl.LightningDataModule):
         )
 
 
-class ResNet3ClassClassifier(pl.LightningModule):
-    """A pl model for classifying images into 3 classes using ResNet50 model."""
+class ConvNext3ClassClassifier(pl.LightningModule):
+    """A pl model for classifying images into 3 classes using ConvNeXt-Tiny.
 
-    def __init__(self, num_classes=3, pretrained=False):
+    Parameters
+    ----------
+    num_classes : int
+        Number of output classes. Default is 3.
+    pretrained : bool
+        Whether to load ImageNet pretrained weights. Default is True.
+    class_weights : list or None
+        Per-class weights for the cross-entropy loss, used to handle class
+        imbalance. Should be raw counts or inverse-frequency weights — they
+        are normalised internally. If None, uniform weights are used.
+    lr : float
+        Learning rate for AdamW. Default is 1e-4.
+    max_epochs : int
+        Total training epochs, used to configure CosineAnnealingLR.
+    """
+
+    def __init__(
+        self,
+        num_classes=3,
+        pretrained=True,
+        class_weights=None,
+        lr=1e-4,
+        max_epochs=50,
+    ):
         super().__init__()
-        # Load pre-trained ResNet
+        self.save_hyperparameters()
 
-        self.resnet = models.resnet50(weights=None)
-        if pretrained:
-            weights = ResNet50_Weights.DEFAULT
-            self.resnet = models.resnet50(weights=weights)
+        weights = ConvNeXt_Tiny_Weights.DEFAULT if pretrained else None
+        self.model = convnext_tiny(weights=weights)
+        # Replace the classifier head
+        in_features = self.model.classifier[-1].in_features
+        self.model.classifier[-1] = nn.Linear(in_features, num_classes)
 
-        # Replace the final fully connected layer to output `num_classes` classes
-        self.resnet.fc = nn.Linear(self.resnet.fc.in_features, num_classes)
+        # Register class weights as a buffer so they move with the device
+        if class_weights is not None:
+            w = torch.tensor(class_weights, dtype=torch.float32)
+        else:
+            w = torch.ones(num_classes, dtype=torch.float32)
+        self.register_buffer("class_weights", w / w.sum())
 
-        # Define accuracy metric
         self.train_acc = Accuracy(task="multiclass", num_classes=num_classes)
         self.val_acc = Accuracy(task="multiclass", num_classes=num_classes)
 
     def forward(self, x):
-        """
-        Forward pass through the model.
-
-        Args:
-            x (torch.Tensor): Input tensor.
-
-        Returns
-        -------
-            torch.Tensor: Output tensor after passing through the ResNet model.
-        """
-        return self.resnet(x)
+        """Forward pass through the model."""
+        return self.model(x)
 
     def configure_optimizers(self):
-        """
-        Configures the optimizers and learning rate schedulers for the model.
-
-        This method sets up the Adam optimizer with a learning rate of 1e-4 and
-        a StepLR learning rate scheduler that reduces the learning rate by a
-        factor of 0.1 every 7 steps.
-
-        Returns
-        -------
-            tuple: A tuple containing two lists:
-                - The first list contains the optimizer(s) to be used.
-                - The second list contains the learning rate scheduler(s) to be used.
-        """
-        # Use Adam optimizer and a learning rate scheduler
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1)
+        """AdamW optimizer with CosineAnnealingLR scheduler."""
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=self.hparams.max_epochs
+        )
         return [optimizer], [scheduler]
 
     def training_step(self, batch, batch_idx):
         """Performs a single training step."""
         images, labels = batch
         logits = self(images)
-        # here we can add weights to the loss function to counteract class imbalance
-        weights = torch.tensor([1, 1, 1], dtype=torch.float32)
-        # weights = weights / class_counts
-        weights = weights / torch.sum(weights)
-        weights = weights.to(self.device)
-        loss = nn.CrossEntropyLoss(weight=weights)(logits, labels)
+        loss = nn.CrossEntropyLoss(weight=self.class_weights)(logits, labels)
         acc = self.train_acc(logits, labels)
         self.log("train_loss", loss, prog_bar=True)
         self.log("train_acc", acc, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
-        """
-        Performs a single validation step during model evaluation.
-
-        Args:
-            batch (tuple): A tuple containing the input data (images) and the
-            corresponding labels.
-            batch_idx (int): The index of the current batch.
-
-        Returns
-        -------
-            torch.Tensor: The computed loss for the current validation batch.
-        Logs:
-            val_loss (float): The cross-entropy loss for the validation batch.
-            val_acc (float): The accuracy of the model on the validation batch.
-        """
+        """Performs a single validation step."""
         images, labels = batch
         logits = self(images)
-        loss = nn.CrossEntropyLoss()(logits, labels)
+        loss = nn.CrossEntropyLoss(weight=self.class_weights)(logits, labels)
         acc = self.val_acc(logits, labels)
         self.log("val_loss", loss, prog_bar=True)
         self.log("val_acc", acc, prog_bar=True)
         return loss
 
 
-class ResNet3ClassPredictor:
+class ConvNext3ClassPredictor:
     """
-    A class for predicting the class of an image using a pre-trained ResNet50 model.
+    Predictor for the ConvNeXt-Tiny 3-class classifier.
 
-    The model is loaded from a checkpoint file.
+    Loads a trained checkpoint and runs inference on single images.
     """
 
-    def __init__(self, model_path, num_classes=3, device=None, model_size=(256, 256)):
-        # Automatically detect device if not provided
-        self.device = (
-            device if device else ("cuda" if torch.cuda.is_available() else "cpu")
-        )
+    def __init__(self, model_path, device=None, model_size=(256, 256)):
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
-        # Load the model
-        self.model = ResNet3ClassClassifier(num_classes=num_classes, pretrained=False)
-        # self.model.load_state_dict(torch.load(model_path, map_location=self.device))
-        self.model = ResNet3ClassClassifier.load_from_checkpoint(model_path)
+        self.model = ConvNext3ClassClassifier.load_from_checkpoint(model_path)
         self.model.to(self.device)
         self.model.eval()
 
-        # Define the image transformation
         self.transform = Compose(
             [
-                Resize(model_size),  # Resize to (224, 224)
-                ToTensor(),  # Convert to PyTorch tensor
-                EnsureType(),
-                # ResNet normalization
+                Resize(model_size),
+                ToTensor(),
                 Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]
         )

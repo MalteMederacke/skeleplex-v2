@@ -19,7 +19,7 @@ from skeleplex.graph.constants import (
 )
 
 if TYPE_CHECKING:
-    from skeleplex.measurements.lumen_classifier import ResNet3ClassClassifier
+    from skeleplex.measurements.lumen_classifier import ConvNext3ClassPredictor
 
     try:
         from sam2.sam2_image_predictor import SAM2ImagePredictor
@@ -34,11 +34,11 @@ def filter_and_segment_lumen(
     data_path,
     save_path,
     sam_checkpoint_path: str | None = None,
-    resnet_predictor: "ResNet3ClassClassifier | None" = None,
+    lumen_classification_model: "ConvNext3ClassPredictor | None" = None,
     eccentricity_thresh=0.7,
     circularity_thresh=0.5,
     find_lumen=True,
-    sam_quality_threshold=0.1,
+    sam_quality_threshold=0.5,
     segmentation_key: str = "segmentation",
 ):
     """
@@ -93,8 +93,8 @@ def filter_and_segment_lumen(
     sam_checkpoint_path : str, optional
         Path to the SAM2 checkpoint file.
         only required if find_lumen is True.
-    resnet_predictor : ResNet3ClassClassifier, optional
-        ResNet classifier for predicting classes.
+    lumen_classification_model : ConvNext3ClassPredictor, optional
+        ConvNext classifier for predicting lumen classes.
         Only required if find_lumen is True.
     eccentricity_thresh : float
         Eccentricity threshold for filtering slices.
@@ -179,7 +179,7 @@ def filter_and_segment_lumen(
                     image_slice,
                     label_slice,
                     predictor,
-                    resnet_predictor,
+                    lumen_classification_model,
                     sam_quality_threshold,
                 )
             label_slices_filt[i] = label_slice
@@ -197,8 +197,8 @@ def find_lumen_in_slice(
     image_slice: np.ndarray,
     label_slice: np.ndarray,
     predictor: "SAM2ImagePredictor",
-    resnet_predictor: "ResNet3ClassClassifier",
-    sam_quality_threshold=0.1,
+    lumen_classification_model: "ConvNext3ClassPredictor",
+    sam_quality_threshold=0.5,
 ) -> np.ndarray:
     """
     Find lumen and branch labels in a single 2D image slice.
@@ -210,7 +210,7 @@ def find_lumen_in_slice(
         associated quality scores.
     2. For each SAM mask, creates a masked image (image * mask), crops it to the
         mask's bounding box, and sends the cropped mask image to the provided
-        resnet_predictor to obtain a predicted class and confidence.
+        lumen_classification_model to obtain a predicted class and confidence.
     3. Builds a new label image where:
         - label value 0 denotes background,
         - label value 1 denotes branch tissue,
@@ -244,7 +244,7 @@ def find_lumen_in_slice(
             - predict(point_coords, point_labels, multimask_output=True) to return
                 (masks, scores, ...) where masks is an array-like of binary masks and
                 scores (sam_quality) is an array-like of quality values.
-    resnet_predictor : object
+    lumen_classification_model : object
             Classifier for cropped mask images. Must implement:
             - predict(cropped_mask_image) -> (pred_class, confidence)
             Where pred_class is an integer code (0 for lumen, 1 for branch, 2 for other)
@@ -306,7 +306,7 @@ def find_lumen_in_slice(
     for j, mask_img in enumerate(mask_imgs):
         # Only classify if SAM mask quality is above threshold
         if sam_quality[j] > sam_quality_threshold:
-            pred_class, conf = resnet_predictor.predict(mask_img)
+            pred_class, conf = lumen_classification_model.predict(mask_img)
             preds.append(
                 {
                     "index": j,
@@ -362,7 +362,7 @@ def find_lumen_in_slice(
             label_with_lumen = label_slice.copy()
 
     label_slice = label_with_lumen
-    return label_slice
+    return label_slice 
 
 
 def lumen_touches_background(label_slice):
@@ -511,8 +511,8 @@ def add_file_to_graph(file):
         return None
 
     file_name = os.path.basename(file)
-    start_node = int(file_name.split("_")[3])
-    end_node = int(file_name.split("_")[5].split(".")[0])
+    start_node = int(file_name.split("sn_")[1].split("_")[0])
+    end_node = int(file_name.split("en_")[1].split(".")[0])
 
     tissue_radius_branch = []
     lumen_radius_branch = []
