@@ -18,6 +18,7 @@ import zarr
 from morphospaces.networks.multiscale_skeletonization import (
     MultiscaleSkeletonizationNet,
 )
+from scripts.fusion_pipeline._constants import IMAGE_PREFIX
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -140,13 +141,7 @@ def skeletonize_for_dask_simplified(
 ##################################################################################################
 
 # Define the image prefix used to name the files
-image_prefix = "LADAF-2021-17-left-v7_processed"  # ADAPT HERE
-
-scale_ranges_manual = {
-    -1: (1, 10),
-    -3: (10, 150),
-}  # ADAPT HERE
-
+image_prefix = IMAGE_PREFIX
 ################ Fusion Part 2.3 ################
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -194,7 +189,7 @@ save_here = zarr.open(
 )
 
 iteratively_process_chunks_3d(
-    input_array=dist_image,
+    input_arrays=dist_image,
     output_zarr=save_here,
     function_to_apply=partial_skeltonize,
     chunk_shape=(192, 192, 192),

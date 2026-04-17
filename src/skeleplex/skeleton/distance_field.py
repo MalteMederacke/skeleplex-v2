@@ -8,6 +8,7 @@ def local_normalized_distance(
     image: np.ndarray,
     max_ball_radius: int = 30,
     return_distance: bool = False,
+    use_local_max: bool = True,
 ) -> np.ndarray:
     """
     Compute normalized distance transform for a binary image.
@@ -23,6 +24,13 @@ def local_normalized_distance(
     max_ball_radius : int
         Maximum radius of the ball used for maximum filtering.
         Default is 30.
+    return_distance : bool
+        If True, return both the distance and normalized distance as a stacked array.
+        If False, return only the normalized distance. Default is False.
+    use_local_max : bool
+        If True, use the local maximum distance for each component.
+        If False, use the max_ball_radius for all components.
+        This can be useful for certain applications. Default is True.
 
     Returns
     -------
@@ -39,9 +47,11 @@ def local_normalized_distance(
 
         distance = distance_transform_edt(mask)
 
-        local_max = np.max(distance)
+        if use_local_max:
+            local_max = np.max(distance)
+        else:
+            local_max = max_ball_radius
         radius = min(int(local_max / 2), max_ball_radius)
-
         # apply maximum filter to normalize distances locally
         local_max_distance = maximum_filter(distance, size=radius * 2 + 1)
 
@@ -56,6 +66,7 @@ def local_normalized_distance(
 def local_normalized_distance_gpu(
     image: np.ndarray,
     max_ball_radius: int = 30,
+    use_local_max: bool = True,
 ) -> np.ndarray:
     """
     Compute normalized distance transform for a binary image on GPU using CuPy.
@@ -72,6 +83,10 @@ def local_normalized_distance_gpu(
     max_ball_radius : int
         Maximum radius for the structuring element used in the maximum filter.
         Default is 30.
+    use_local_max : bool
+        If True, use the local maximum distance for each component.
+        If False, use the max_ball_radius for all components.
+        This can be useful for certain applications. Default is True.
 
     Returns
     -------
@@ -103,7 +118,10 @@ def local_normalized_distance_gpu(
 
         distance = distance_transform_edt_gpu(mask)
 
-        local_max = cp.max(distance)
+        if use_local_max:
+            local_max = cp.max(distance)
+        else:
+            local_max = max_ball_radius
         radius = min(int(local_max / 2), max_ball_radius)
 
         # apply maximum filter to normalize distances locally

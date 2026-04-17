@@ -5,14 +5,15 @@ import time
 
 import dask.array as da
 
+from scripts.fusion_pipeline._constants import IMAGE_PREFIX
 from skeleplex.skeleton import upscale_skeleton_parallel
 
 if __name__ == "__main__":
     # Define the image prefix used to name the files
-    image_prefix = "LADAF-2021-17-left-v7_processed"  # ADAPT HERE
+    image_prefix = IMAGE_PREFIX
 
     # Load the initial image (here: label)
-    lung_image = da.from_zarr(f"/data/{image_prefix}.zarr")  # ADAPT HERE
+    lung_image = da.from_zarr(f"/data/{image_prefix}.zarr")
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
