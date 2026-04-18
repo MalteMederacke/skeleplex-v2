@@ -12,6 +12,8 @@ module load stack/2024-06 cuda/12.8.0
 module load stack/2024-06 python/3.11.6
 source skeleplexenv/bin/activate
 
-python 2_3_fusion_worker.py csvs/step_2_3.csv
+CHUNKS_PER_TASK=10  # ADAPT HERE — fewer chunks per task since inference is slow
+
+python 2_3_fusion_worker.py csvs/step_2_3.csv $CHUNKS_PER_TASK
 
 echo "Job completed: $(date)"
