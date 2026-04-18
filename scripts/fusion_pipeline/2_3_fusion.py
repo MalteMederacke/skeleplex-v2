@@ -18,7 +18,11 @@ import zarr
 from morphospaces.networks.multiscale_skeletonization import (
     MultiscaleSkeletonizationNet,
 )
-from scripts.fusion_pipeline._constants import IMAGE_PREFIX
+from scripts.fusion_pipeline._constants import (
+    CHECKPOINT_PATH,
+    DISTANCE_FIELD_ZARR,
+    SKELETON_PREDICTIONS_ZARR,
+)
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -140,8 +144,6 @@ def skeletonize_for_dask_simplified(
 #                                           RUNNING FUSION
 ##################################################################################################
 
-# Define the image prefix used to name the files
-image_prefix = IMAGE_PREFIX
 ################ Fusion Part 2.3 ################
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -166,22 +168,20 @@ print("Scale number: ", scale_number)
 
 # Load scaled distance images form zarr to Predict Skeleton on all scaled images
 dist_image = da.from_zarr(
-    f"/data/{image_prefix}_distance_field_on_scales.zarr/scale{scale_number}_maxball_2"
+    f"{DISTANCE_FIELD_ZARR}/scale{scale_number}_maxball_2"
 )
 dist_image = dist_image.rechunk((192, 192, 192))
 
 
 # Predict Skeleton on all scaled images
 start_time = time.time()
-# load the new model here
-path_to_checkpoint = "reg-best.ckpt"
-model = SkeletonizationRegressionDynUNet.load_from_checkpoint(path_to_checkpoint)
+model = SkeletonizationRegressionDynUNet.load_from_checkpoint(CHECKPOINT_PATH)
 
 partial_skeltonize = partial(skeletonize_for_dask_simplified, model=model)
 
 
 save_here = zarr.open(
-    f"/data/{image_prefix}_skeleton_predictions_on_scales.zarr/scale{scale_number}",
+    f"{SKELETON_PREDICTIONS_ZARR}/scale{scale_number}",
     mode="w",
     shape=dist_image.shape,
     chunks=dist_image.chunks,

@@ -7,13 +7,11 @@ import dask.array as da
 
 from skeleplex.skeleton.fusion.scale_image import scale_image
 
-from ._constants import IMAGE_PREFIX
+from ._constants import IMAGE_PREFIX, INPUT_IMAGE_PATH
 
-# Define the image prefix used to name the files
 image_prefix = IMAGE_PREFIX
 
-
-lung_image = da.from_zarr(f"/data/{image_prefix}.zarr")  # ADAPT HERE
+lung_image = da.from_zarr(INPUT_IMAGE_PATH)
 lung_image = lung_image.rechunk((96, 96, 96))
 
 

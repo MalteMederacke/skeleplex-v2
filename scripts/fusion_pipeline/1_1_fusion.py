@@ -9,14 +9,10 @@ import zarr
 from skeleplex.skeleton.fusion.scale_map import radius_map_generator_gpu
 from skeleplex.utils._chunked import iteratively_process_chunks_3d
 
-from ._constants import IMAGE_PREFIX
-
-# Define the image prefix used to name the files
-image_prefix = IMAGE_PREFIX  # ADAPT HERE
-
+from ._constants import INPUT_IMAGE_PATH, RADIUS_MAP_PATH
 
 # Load the initial image (here: label)
-lung_image = da.from_zarr(f"/data/{image_prefix}.zarr")  # ADAPT HERE
+lung_image = da.from_zarr(INPUT_IMAGE_PATH)
 lung_image = lung_image.rechunk((192, 192, 192))
 
 
@@ -24,7 +20,7 @@ lung_image = lung_image.rechunk((192, 192, 192))
 start_time = time.time()
 
 save_here = zarr.open(
-    f"/data/{image_prefix}_radius_map_new.zarr/scale_original",
+    RADIUS_MAP_PATH,
     mode="w",
     shape=lung_image.shape,
     chunks=(192, 192, 192),

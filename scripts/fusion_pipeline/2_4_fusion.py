@@ -11,11 +11,13 @@ from skimage.morphology import skeletonize as sk_skeletonize
 from skeleplex.skeleton._skeletonize import threshold_skeleton
 from skeleplex.utils._chunked import iteratively_process_chunks_3d
 
-from ._constants import IMAGE_PREFIX, THRESHOLDS
+from ._constants import (
+    SCALED_IMAGE_ZARR,
+    SKELETON_PREDICTIONS_ZARR,
+    SKELETONIZED_ON_SCALES_ZARR,
+    THRESHOLDS,
+)
 
-image_prefix = IMAGE_PREFIX
-
-# Thresholds per scale for binary skeleton generation
 thresholds = THRESHOLDS
 
 parser = argparse.ArgumentParser()
@@ -30,12 +32,8 @@ print("Scale number: ", scale_number)
 threshold = thresholds[scale_number]
 print("Threshold: ", threshold)
 
-skel_pred_image = da.from_zarr(
-    f"/data/{image_prefix}_skeleton_predictions_on_scales.zarr/scale{scale_number}"
-)
-scaled_image = da.from_zarr(
-    f"/data/{image_prefix}_image_scaled.zarr/scale{scale_number}"
-)
+skel_pred_image = da.from_zarr(f"{SKELETON_PREDICTIONS_ZARR}/scale{scale_number}")
+scaled_image = da.from_zarr(f"{SCALED_IMAGE_ZARR}/scale{scale_number}")
 
 
 def _mask_fn(skel: np.ndarray, seg: np.ndarray) -> np.ndarray:
@@ -45,7 +43,7 @@ def _mask_fn(skel: np.ndarray, seg: np.ndarray) -> np.ndarray:
 # Mask out the background in the skeleton prediction image
 time_start_masking = time.time()
 save_masked = zarr.open(
-    f"/data/{image_prefix}_skeleton_predictions_on_scales.zarr/scale{scale_number}_masked",
+    f"{SKELETON_PREDICTIONS_ZARR}/scale{scale_number}_masked",
     mode="w",
     shape=skel_pred_image.shape,
     chunks=(192, 192, 192),
@@ -62,7 +60,7 @@ iteratively_process_chunks_3d(
 print(f"--- Masking took {time.time() - time_start_masking} seconds ---")
 
 masked_segmentation_reloaded = da.from_zarr(
-    f"/data/{image_prefix}_skeleton_predictions_on_scales.zarr/scale{scale_number}_masked"
+    f"{SKELETON_PREDICTIONS_ZARR}/scale{scale_number}_masked"
 )
 
 # Threshold image
@@ -71,11 +69,11 @@ lung_image_binary_skeleton = threshold_skeleton(
     masked_segmentation_reloaded, threshold=threshold
 )
 lung_image_binary_skeleton.to_zarr(
-    f"/data/{image_prefix}_skeleton_predictions_on_scales.zarr/scale{scale_number}_ts",
+    f"{SKELETON_PREDICTIONS_ZARR}/scale{scale_number}_ts",
     mode="w",
 )
 lung_image_binary_skeleton_reloaded = da.from_zarr(
-    f"/data/{image_prefix}_skeleton_predictions_on_scales.zarr/scale{scale_number}_ts"
+    f"{SKELETON_PREDICTIONS_ZARR}/scale{scale_number}_ts"
 )
 print(f"--- Thresholding took {time.time() - start_time3} seconds ---")
 
@@ -86,7 +84,7 @@ lung_image_binary_skeleton_reloaded = lung_image_binary_skeleton_reloaded.rechun
 )
 
 save_skel = zarr.open(
-    f"/data/{image_prefix}_skeletonized_on_scales.zarr/scale{scale_number}",
+    f"{SKELETONIZED_ON_SCALES_ZARR}/scale{scale_number}",
     mode="w",
     shape=lung_image_binary_skeleton_reloaded.shape,
     chunks=(192, 192, 192),

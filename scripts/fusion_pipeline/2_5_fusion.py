@@ -3,18 +3,13 @@
 import argparse
 import time
 
-import dask.array as da
-
-from scripts.fusion_pipeline._constants import IMAGE_PREFIX
+from scripts.fusion_pipeline._constants import (
+    SKELETONIZED_ON_SCALES_ZARR,
+    SKELETONIZED_RESCALED_ZARR,
+)
 from skeleplex.skeleton import upscale_skeleton_parallel
 
 if __name__ == "__main__":
-    # Define the image prefix used to name the files
-    image_prefix = IMAGE_PREFIX
-
-    # Load the initial image (here: label)
-    lung_image = da.from_zarr(f"/data/{image_prefix}.zarr")
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--job-index", help="this is the index of the submitted job", type=int
@@ -44,10 +39,8 @@ if __name__ == "__main__":
     n_processes = 4
     pool_type = "spawn"
 
-    input_path = f"/data/{image_prefix}_skeletonized_on_scales.zarr/scale{scale_number}"
-    output_path = (
-        f"/data/{image_prefix}_skeletonized_rescaled.zarr/origin_scale{scale_number}"
-    )
+    input_path = f"{SKELETONIZED_ON_SCALES_ZARR}/scale{scale_number}"
+    output_path = f"{SKELETONIZED_RESCALED_ZARR}/origin_scale{scale_number}"
 
     # Benchmark the upscaling function
     print("\nRunning upscale_skeleton_parallel...")
