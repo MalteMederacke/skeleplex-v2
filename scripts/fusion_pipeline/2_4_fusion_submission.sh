@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=50G
-#SBATCH --output=2_4_fusion_%j_%a.out
+#SBATCH --output=logs/2_4_fusion_%j_%a.out
 
 module load stack/2024-06 cuda/12.8.0
 module load stack/2024-06 python/3.11.6

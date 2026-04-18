@@ -8,6 +8,7 @@
 
 ARRAY_RANGE="0-3"  # ADAPT HERE
 
+mkdir -p logs
 echo "Submitting Fusion Pipeline (array range: ${ARRAY_RANGE})..."
 
 # --- Part I ---

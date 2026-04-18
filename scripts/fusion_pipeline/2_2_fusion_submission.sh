@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=30G
 #SBATCH --gpus=rtx_4090:1
-#SBATCH --output=2_2_fusion_%j_%a.out
+#SBATCH --output=logs/2_2_fusion_%j_%a.out
 
 module load stack/2024-06 cuda/12.8.0
 module load stack/2024-06 python/3.11.6
