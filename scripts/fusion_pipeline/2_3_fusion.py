@@ -1,4 +1,5 @@
 """Fusion Part 2.3: Predict Skeletons on Scaled Distance Field Images."""
+# isort: skip_file  — warnings.catch_warnings block prevents isort-compatible ordering
 
 ##################################################################################################
 #                                           IMPORTS
@@ -6,9 +7,12 @@
 import argparse
 import copy
 import gc
+import sys
 import time
 import uuid
 import warnings
+from functools import partial
+from pathlib import Path
 from typing import Literal
 
 import dask.array as da
@@ -18,22 +22,23 @@ import zarr
 from morphospaces.networks.multiscale_skeletonization import (
     MultiscaleSkeletonizationNet,
 )
-from scripts.fusion_pipeline._constants import (
-    CHECKPOINT_PATH,
-    DISTANCE_FIELD_ZARR,
-    SKELETON_PREDICTIONS_ZARR,
-)
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     from monai.inferers import SlidingWindowInfererAdapt
 
-from functools import partial
-
 from morphospaces.networks.skeletonization import SkeletonizationRegressionDynUNet
 
 from skeleplex.skeleton._utils import get_skeletonization_model, make_image_5d
 from skeleplex.utils._chunked import iteratively_process_chunks_3d
+
+# isort: split
+sys.path.insert(0, str(Path(__file__).parent))
+from _constants import (
+    CHECKPOINT_PATH,
+    DISTANCE_FIELD_ZARR,
+    SKELETON_PREDICTIONS_ZARR,
+)
 
 ##################################################################################################
 #                                           FUNCTIONS

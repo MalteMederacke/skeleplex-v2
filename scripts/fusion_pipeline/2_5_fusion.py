@@ -1,13 +1,18 @@
 """Benchmark script for chunked skeleton upscaling with zarr round-trip."""
 
 import argparse
+import sys
 import time
+from pathlib import Path
 
-from scripts.fusion_pipeline._constants import (
+from skeleplex.skeleton import upscale_skeleton_parallel
+
+# isort: split
+sys.path.insert(0, str(Path(__file__).parent))
+from _constants import (
     SKELETONIZED_ON_SCALES_ZARR,
     SKELETONIZED_RESCALED_ZARR,
 )
-from skeleplex.skeleton import upscale_skeleton_parallel
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

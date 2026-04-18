@@ -1,7 +1,9 @@
 """Fusion Part 2.4: Threshold and skeletonize the images on each scale."""
 
 import argparse
+import sys
 import time
+from pathlib import Path
 
 import dask.array as da
 import numpy as np
@@ -11,7 +13,9 @@ from skimage.morphology import skeletonize as sk_skeletonize
 from skeleplex.skeleton._skeletonize import threshold_skeleton
 from skeleplex.utils._chunked import iteratively_process_chunks_3d
 
-from ._constants import (
+# isort: split
+sys.path.insert(0, str(Path(__file__).parent))
+from _constants import (
     SCALED_IMAGE_ZARR,
     SKELETON_PREDICTIONS_ZARR,
     SKELETONIZED_ON_SCALES_ZARR,

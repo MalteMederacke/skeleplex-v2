@@ -1,8 +1,10 @@
 """Fusion Part 2.2: Calculate Distance Field on Scaled Images."""
 
 import argparse
+import sys
 import time
 from functools import partial
+from pathlib import Path
 
 import dask.array as da
 import numpy as np
@@ -11,7 +13,9 @@ import zarr
 from skeleplex.skeleton.distance_field import local_normalized_distance_gpu
 from skeleplex.utils._chunked import iteratively_process_chunks_3d
 
-from ._constants import DISTANCE_FIELD_ZARR, SCALED_IMAGE_ZARR
+# isort: split
+sys.path.insert(0, str(Path(__file__).parent))
+from _constants import DISTANCE_FIELD_ZARR, SCALED_IMAGE_ZARR
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--job-index", type=int)

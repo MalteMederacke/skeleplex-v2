@@ -1,10 +1,21 @@
 """Fusion Part 3: Generate Optimal Tree from Scale Mapped Skeleton Predictions."""
 
+import sys
 import time
+from pathlib import Path
 
 import dask.array as da
 import zarr
-from scripts.fusion_pipeline._constants import (
+from skimage.morphology import skeletonize as sk_skeletonize
+
+from skeleplex.skeleton import repair_breaks_lazy
+from skeleplex.skeleton.fusion.scale_image import pad_to_match
+from skeleplex.skeleton.fusion.tree_fusion import fused_tree_generator
+from skeleplex.utils._chunked import iteratively_process_chunks_3d
+
+# isort: split
+sys.path.insert(0, str(Path(__file__).parent))
+from _constants import (
     FINAL_SKELETON_PATH,
     FINAL_SKELETON_SKELETONIZED_PATH,
     FUSED_TREE_PATH,
@@ -13,12 +24,6 @@ from scripts.fusion_pipeline._constants import (
     SCALE_RANGES_MANUAL,
     SKELETONIZED_RESCALED_ZARR,
 )
-from skimage.morphology import skeletonize as sk_skeletonize
-
-from skeleplex.skeleton import repair_breaks_lazy
-from skeleplex.skeleton.fusion.scale_image import pad_to_match
-from skeleplex.skeleton.fusion.tree_fusion import fused_tree_generator
-from skeleplex.utils._chunked import iteratively_process_chunks_3d
 
 scale_ranges_manual = SCALE_RANGES_MANUAL
 

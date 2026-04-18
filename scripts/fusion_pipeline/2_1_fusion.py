@@ -1,13 +1,17 @@
 """Fusion Part 2.1: Scale the image to the required scales."""
 
 import argparse
+import sys
 import time
+from pathlib import Path
 
 import dask.array as da
 
 from skeleplex.skeleton.fusion.scale_image import scale_image
 
-from ._constants import IMAGE_PREFIX, INPUT_IMAGE_PATH
+# isort: split
+sys.path.insert(0, str(Path(__file__).parent))
+from _constants import IMAGE_PREFIX, INPUT_IMAGE_PATH
 
 image_prefix = IMAGE_PREFIX
 

@@ -1,6 +1,8 @@
 """Fusion Part 1.1: Generate Radius Map."""
 
+import sys
 import time
+from pathlib import Path
 
 import dask.array as da
 import numpy as np
@@ -9,7 +11,9 @@ import zarr
 from skeleplex.skeleton.fusion.scale_map import radius_map_generator_gpu
 from skeleplex.utils._chunked import iteratively_process_chunks_3d
 
-from ._constants import INPUT_IMAGE_PATH, RADIUS_MAP_PATH
+# isort: split
+sys.path.insert(0, str(Path(__file__).parent))
+from _constants import INPUT_IMAGE_PATH, RADIUS_MAP_PATH
 
 # Load the initial image (here: label)
 lung_image = da.from_zarr(INPUT_IMAGE_PATH)
