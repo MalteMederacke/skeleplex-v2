@@ -8,9 +8,7 @@
 #SBATCH --gpus=rtx_4090:1
 #SBATCH --output=logs/3_fusion_%j.out
 
-module load stack/2024-06 cuda/12.8.0
-module load stack/2024-06 python/3.11.6
-source skeleplexenv/bin/activate
+source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
 python 3_fusion.py
 

@@ -12,7 +12,7 @@ from skeleplex.skeleton.fusion.scale_map import scale_map_generator_gpu
 from skeleplex.utils._chunked import iteratively_process_chunks_3d
 
 # isort: split
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from _constants import RADIUS_MAP_PATH, SCALE_MAP_PATH, SCALE_RANGES_MANUAL
 
 scale_ranges_manual = SCALE_RANGES_MANUAL

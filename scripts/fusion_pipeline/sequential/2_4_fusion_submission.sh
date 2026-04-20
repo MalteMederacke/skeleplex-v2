@@ -7,9 +7,9 @@
 #SBATCH --mem-per-cpu=50G
 #SBATCH --output=logs/2_4_fusion_%j_%a.out
 
-module load stack/2024-06 cuda/12.8.0
-module load stack/2024-06 python/3.11.6
-source skeleplexenv/bin/activate
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+source ../env.sh
 
 JOB_INDEX_OFFSET=3  # ADAPT HERE
 

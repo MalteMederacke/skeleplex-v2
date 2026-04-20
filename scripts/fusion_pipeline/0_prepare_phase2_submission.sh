@@ -7,8 +7,7 @@
 #SBATCH --mem-per-cpu=16G
 #SBATCH --output=logs/prepare_phase2_%j.out
 
-module load stack/2024-06 python/3.11.6
-source skeleplexenv/bin/activate
+source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
 python prepare_parallel_fusion.py --phase 2
 

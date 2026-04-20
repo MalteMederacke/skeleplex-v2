@@ -8,12 +8,11 @@
 #SBATCH --gpus=rtx_4090:1
 #SBATCH --output=logs/1_2_fusion_p_%j_%a.out
 
-module load stack/2024-06 cuda/12.8.0
-module load stack/2024-06 python/3.11.6
-source skeleplexenv/bin/activate
+source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
-CHUNKS_PER_TASK=50  # ADAPT HERE
+CSV=${1:-csvs/step_1_2.csv}
+CHUNKS_PER_TASK=${CHUNKS_PER_TASK:-50}
 
-python 1_2_fusion_worker.py csvs/step_1_2.csv $CHUNKS_PER_TASK
+python 1_2_fusion_worker.py $CSV $CHUNKS_PER_TASK
 
 echo "Job completed: $(date)"

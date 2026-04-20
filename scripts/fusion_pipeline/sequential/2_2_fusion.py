@@ -14,7 +14,7 @@ from skeleplex.skeleton.distance_field import local_normalized_distance_gpu
 from skeleplex.utils._chunked import iteratively_process_chunks_3d
 
 # isort: split
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from _constants import DISTANCE_FIELD_ZARR, SCALED_IMAGE_ZARR
 
 parser = argparse.ArgumentParser()

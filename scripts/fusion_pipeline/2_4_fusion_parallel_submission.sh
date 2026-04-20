@@ -7,11 +7,11 @@
 #SBATCH --mem-per-cpu=20G
 #SBATCH --output=logs/2_4_fusion_p_%j_%a.out
 
-module load stack/2024-06 python/3.11.6
-source skeleplexenv/bin/activate
+source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
-CHUNKS_PER_TASK=50  # ADAPT HERE
+CSV=${1:-csvs/step_2_4.csv}
+CHUNKS_PER_TASK=${CHUNKS_PER_TASK:-50}
 
-python 2_4_fusion_worker.py csvs/step_2_4.csv $CHUNKS_PER_TASK
+python 2_4_fusion_worker.py $CSV $CHUNKS_PER_TASK
 
 echo "Job completed: $(date)"
