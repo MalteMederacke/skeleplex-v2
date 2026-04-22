@@ -23,6 +23,8 @@ THRESHOLDS = {
     -4: 0.7,
 }  # ADAPT HERE
 
+DISTANCE_FIELD_TYPE = 'normal_field'  # ADAPT HERE — 'distance_field' or 'normal_field'
+
 CHECKPOINT_PATH = "reg-best.ckpt"  # ADAPT HERE — path to model checkpoint
 
 # ============================================================

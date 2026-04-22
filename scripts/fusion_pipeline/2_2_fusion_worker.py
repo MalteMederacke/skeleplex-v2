@@ -9,11 +9,11 @@ import numpy as np
 import pandas as pd
 import zarr
 
-from skeleplex.skeleton.distance_field import local_normalized_distance_gpu
+from skeleplex.skeleton.distance_field import local_normalized_distance_gpu, inward_unit_normal_field_gpu
 
 # isort: split
 sys.path.insert(0, str(Path(__file__).parent))
-from _constants import DISTANCE_FIELD_ZARR, SCALED_IMAGE_ZARR
+from _constants import DISTANCE_FIELD_ZARR, SCALED_IMAGE_ZARR, DISTANCE_FIELD_TYPE
 from _parallel_utils import get_slices_for_chunk, write_batch_marker
 
 csv_path = sys.argv[1]
@@ -28,7 +28,10 @@ if start >= len(job_df):
     print(f"batch {batch_id} out of range ({len(job_df)} chunks total), skipping")
     sys.exit(0)
 
-fn = partial(local_normalized_distance_gpu, max_ball_radius=2)
+if DISTANCE_FIELD_TYPE == 'distance_field':
+    fn = partial(local_normalized_distance_gpu, max_ball_radius=2)
+elif DISTANCE_FIELD_TYPE == 'normal_field':
+    fn = partial(inward_unit_normal_field_gpu)
 
 # Cache open zarr handles per scale to avoid repeated opens
 input_zarrs: dict[int, zarr.Array] = {}
@@ -42,7 +45,7 @@ for chunk_id in range(start, end):
             f"{SCALED_IMAGE_ZARR}/scale{scale_number}", mode="r"
         )
         output_zarrs[scale_number] = zarr.open(
-            f"{DISTANCE_FIELD_ZARR}/scale{scale_number}_maxball_2", mode="a"
+            f"{DISTANCE_FIELD_ZARR}/scale{scale_number}_{DISTANCE_FIELD_TYPE}", mode="a"
         )
 
     result = fn(input_zarrs[scale_number][expanded])
