@@ -8,7 +8,7 @@
 #SBATCH --gpus=rtx_4090:1
 #SBATCH --output=logs/1_3_fusion_%j.out
 
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$SLURM_SUBMIT_DIR"
 
 source ../env.sh
 

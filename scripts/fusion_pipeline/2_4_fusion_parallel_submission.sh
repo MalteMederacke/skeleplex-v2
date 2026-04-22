@@ -7,7 +7,7 @@
 #SBATCH --mem-per-cpu=20G
 #SBATCH --output=logs/2_4_fusion_p_%j_%a.out
 
-source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
+source "$SLURM_SUBMIT_DIR/env.sh"
 
 CSV=${1:-csvs/step_2_4.csv}
 CHUNKS_PER_TASK=${CHUNKS_PER_TASK:-50}

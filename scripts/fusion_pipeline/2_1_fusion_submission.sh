@@ -7,9 +7,10 @@
 #SBATCH --mem-per-cpu=20G
 #SBATCH --output=logs/2_1_fusion_%j_%a.out
 
-source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
+cd "$SLURM_SUBMIT_DIR"
+source "$SLURM_SUBMIT_DIR/env.sh"
 
-JOB_INDEX_OFFSET=3  # ADAPT HERE
+JOB_INDEX_OFFSET=3  # ADAPT HERE: offset such that array_task_id + offset = scale_number
 
 python 2_1_fusion.py --job-index $SLURM_ARRAY_TASK_ID --job-index-offset $JOB_INDEX_OFFSET
 

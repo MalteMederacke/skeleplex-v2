@@ -11,9 +11,7 @@ from skeleplex.skeleton.fusion.scale_image import scale_image
 
 # isort: split
 sys.path.insert(0, str(Path(__file__).parent))
-from _constants import IMAGE_PREFIX, INPUT_IMAGE_PATH
-
-image_prefix = IMAGE_PREFIX
+from _constants import INPUT_IMAGE_PATH, SCALED_IMAGE_ZARR
 
 lung_image = da.from_zarr(INPUT_IMAGE_PATH)
 lung_image = lung_image.rechunk((96, 96, 96))
@@ -30,5 +28,5 @@ print("Job Index Offset: ", args.job_index_offset)
 print("Scale number: ", scale_number)
 
 start_time = time.time()
-scale_image(lung_image, scale_number=scale_number, image_prefix=image_prefix)
+scale_image(lung_image, zarr_root=SCALED_IMAGE_ZARR, scale_number=scale_number)
 print(f"Scaling image to scale {scale_number} took {time.time() - start_time} s")

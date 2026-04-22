@@ -1,9 +1,30 @@
 """Shared utilities for parallel chunk-based fusion processing."""
 
 import re
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+
+def write_batch_marker(csv_path: str, batch_id: int) -> None:
+    """Write a sentinel file marking this batch as successfully completed."""
+    marker_dir = Path(csv_path).parent / "markers"
+    marker_dir.mkdir(exist_ok=True)
+    stem = Path(csv_path).stem
+    (marker_dir / f"{stem}_batch_{batch_id}.done").touch()
+
+
+def find_incomplete_batches(csv_path: str, chunks_per_task: int) -> list[int]:
+    """Return batch IDs that have no completion marker."""
+    df = pd.read_csv(csv_path)
+    n_batches = (len(df) + chunks_per_task - 1) // chunks_per_task
+    marker_dir = Path(csv_path).parent / "markers"
+    stem = Path(csv_path).stem
+    return [
+        b for b in range(n_batches)
+        if not (marker_dir / f"{stem}_batch_{b}.done").exists()
+    ]
 
 
 def get_chunking_df(

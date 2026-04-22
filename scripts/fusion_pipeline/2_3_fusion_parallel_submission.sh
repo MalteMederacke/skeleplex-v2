@@ -8,7 +8,7 @@
 #SBATCH --gpus=rtx_4090:1
 #SBATCH --output=logs/2_3_fusion_p_%j_%a.out
 
-source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
+source "$SLURM_SUBMIT_DIR/env.sh"
 
 CSV=${1:-csvs/step_2_3.csv}
 CHUNKS_PER_TASK=${CHUNKS_PER_TASK:-10}  # fewer chunks — inference is slow per chunk

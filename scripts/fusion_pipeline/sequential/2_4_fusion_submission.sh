@@ -7,7 +7,7 @@
 #SBATCH --mem-per-cpu=50G
 #SBATCH --output=logs/2_4_fusion_%j_%a.out
 
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$SLURM_SUBMIT_DIR"
 
 source ../env.sh
 

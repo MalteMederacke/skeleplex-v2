@@ -14,7 +14,7 @@ from skeleplex.skeleton.distance_field import local_normalized_distance_gpu
 # isort: split
 sys.path.insert(0, str(Path(__file__).parent))
 from _constants import DISTANCE_FIELD_ZARR, SCALED_IMAGE_ZARR
-from _parallel_utils import get_slices_for_chunk
+from _parallel_utils import get_slices_for_chunk, write_batch_marker
 
 csv_path = sys.argv[1]
 chunks_per_task = int(sys.argv[2]) if len(sys.argv) > 2 else 1
@@ -49,4 +49,5 @@ for chunk_id in range(start, end):
     output_zarrs[scale_number][core_out] = result[core_in_result]
     print(f"  chunk {chunk_id} (scale {scale_number}) done ({chunk_id - start + 1}/{end - start})")
 
+write_batch_marker(csv_path, batch_id)
 print(f"Batch {batch_id} finished ({end - start} chunks).")

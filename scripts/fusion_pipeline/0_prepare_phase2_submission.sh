@@ -7,7 +7,8 @@
 #SBATCH --mem-per-cpu=16G
 #SBATCH --output=logs/prepare_phase2_%j.out
 
-source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
+cd "$SLURM_SUBMIT_DIR"
+source "$SLURM_SUBMIT_DIR/env.sh"
 
 python prepare_parallel_fusion.py --phase 2
 

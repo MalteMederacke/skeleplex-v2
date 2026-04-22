@@ -74,9 +74,11 @@ def resize(
 
 
 
-def scale_image(image: np.ndarray,
-                scale_number: int,
-                image_prefix: str) -> np.ndarray:
+def scale_image(
+    image: np.ndarray,
+    zarr_root: str,
+    scale_number: int,
+) -> None:
     """
     Scale the image for the fusion algorithm.
 
@@ -90,14 +92,11 @@ def scale_image(image: np.ndarray,
     ----------
     image : np.ndarray
         Binary array where non-zero values are interpreted as foreground.
+    zarr_root : str
+        Root zarr path under which scale arrays are stored as
+        ``{zarr_root}/scale{scale_number}``.
     scale_number : int
         This value is used to map the scales to the radii in the radius_map.
-
-
-    Returns
-    -------
-    np.ndarray
-        Input arrays scaled to the specified scales.
     """
     scale_factor = int(1 / (2 ** (scale_number)))
     print("Scale factor: ", scale_factor)
@@ -110,14 +109,10 @@ def scale_image(image: np.ndarray,
         output_shape=(sz // scale_factor, sy // scale_factor, sx // scale_factor),
     )
 
-    # save as zarr and add attributes
     print(dask_arr.shape)
 
-    dask_arr.to_zarr(
-        f"/data/{image_prefix}_image_scaled.zarr/scale{scale_number}",
-        overwrite=True,
-    )
-    group = zarr.open_group(f"/data/{image_prefix}_image_scaled.zarr", mode="a")
+    dask_arr.to_zarr(f"{zarr_root}/scale{scale_number}", overwrite=True)
+    group = zarr.open_group(zarr_root, mode="a")
     group[f"scale{scale_number}"].attrs["scale"] = [
         scale_factor,
         scale_factor,
