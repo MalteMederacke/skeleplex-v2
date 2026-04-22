@@ -19,6 +19,7 @@ import zarr
 # isort: split
 sys.path.insert(0, str(Path(__file__).parent))
 from _constants import (
+    DISTANCE_FIELD_TYPE,
     DISTANCE_FIELD_ZARR,
     INPUT_IMAGE_PATH,
     RADIUS_MAP_PATH,
@@ -114,13 +115,17 @@ def prepare_phase2(force: bool) -> None:
         s = scaled.shape
         print(f"  scale={scale}, shape={s}")
 
-        # 2_2: distance field — border (10,10,10)
+        # 2_2: distance / normal field — border (10,10,10)
+        _is_normal = DISTANCE_FIELD_TYPE == "normal_field"
+        chunk_22 = (3, *STORAGE_CHUNK) if _is_normal else STORAGE_CHUNK
+        out_shape_22 = (3, *s) if _is_normal else s
         df = get_chunking_df(
-            scaled, s, PROC_CHUNK["2_2"], (10, 10, 10), scale_number=scale
+            scaled, out_shape_22, PROC_CHUNK["2_2"], (10, 10, 10), scale_number=scale
         )
         dfs_22.append(df)
         _open_or_create_zarr(
-            f"{DISTANCE_FIELD_ZARR}/scale{scale}_maxball_2", s, STORAGE_CHUNK, np.float32
+            f"{DISTANCE_FIELD_ZARR}/scale{scale}_{DISTANCE_FIELD_TYPE}",
+            out_shape_22, chunk_22, np.float32,
         )
 
         # 2_3: skeleton prediction — border (60,60,60)

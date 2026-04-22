@@ -5,15 +5,17 @@ import sys
 from functools import partial
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import zarr
 
-from skeleplex.skeleton.distance_field import local_normalized_distance_gpu, inward_unit_normal_field_gpu
+from skeleplex.skeleton.distance_field import (
+    inward_unit_normal_field_gpu,
+    local_normalized_distance_gpu,
+)
 
 # isort: split
 sys.path.insert(0, str(Path(__file__).parent))
-from _constants import DISTANCE_FIELD_ZARR, SCALED_IMAGE_ZARR, DISTANCE_FIELD_TYPE
+from _constants import DISTANCE_FIELD_TYPE, DISTANCE_FIELD_ZARR, SCALED_IMAGE_ZARR
 from _parallel_utils import get_slices_for_chunk, write_batch_marker
 
 csv_path = sys.argv[1]
@@ -41,10 +43,10 @@ for chunk_id in range(start, end):
     expanded, core_in_result, core_out, scale_number = get_slices_for_chunk(job_df, chunk_id)
 
     if scale_number not in input_zarrs:
-        input_zarrs[scale_number] = zarr.open(
+        input_zarrs[scale_number] = zarr.open_array(
             f"{SCALED_IMAGE_ZARR}/scale{scale_number}", mode="r"
         )
-        output_zarrs[scale_number] = zarr.open(
+        output_zarrs[scale_number] = zarr.open_array(
             f"{DISTANCE_FIELD_ZARR}/scale{scale_number}_{DISTANCE_FIELD_TYPE}", mode="a"
         )
 

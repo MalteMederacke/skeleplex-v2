@@ -27,6 +27,7 @@ import pandas as pd
 # isort: split
 sys.path.insert(0, str(Path(__file__).parent))
 from _constants import (
+    DISTANCE_FIELD_TYPE,
     DISTANCE_FIELD_ZARR,
     RADIUS_MAP_PATH,
     SCALE_MAP_PATH,
@@ -47,7 +48,7 @@ def _output_path(step: str, scale: int | None) -> str:
     if step == "1_3":
         return SCALE_MAP_PROCESSED_PATH
     if step == "2_2":
-        return f"{DISTANCE_FIELD_ZARR}/scale{scale}_maxball_2"
+        return f"{DISTANCE_FIELD_ZARR}/scale{scale}_{DISTANCE_FIELD_TYPE}"
     if step == "2_3":
         return f"{SKELETON_PREDICTIONS_ZARR}/scale{scale}"
     if step == "2_4":

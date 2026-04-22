@@ -1,57 +1,30 @@
 """Parallel worker for Fusion 2.3: Skeleton Prediction — one batch of chunks per SLURM task.
 
 The model is loaded once per SLURM task and reused across all chunks in the batch.
+Supports both distance_field (1-channel, 3-D) and normal_field (3-channel, 4-D)
+inputs, controlled by DISTANCE_FIELD_TYPE in _constants.py.
 """
 # isort: skip_file — warnings.catch_warnings block prevents isort-compatible ordering
 
-import copy
-import gc
 import os
 import sys
-import warnings
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
-import torch
 import zarr
-from morphospaces.networks.skeletonization import SkeletonizationRegressionDynUNet
 
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-    from monai.inferers import SlidingWindowInfererAdapt
-
-from skeleplex.skeleton._utils import make_image_5d
+from skeleplex.skeleton._skeletonize import load_normal_field_model, skeletonize
+from skeleplex.skeleton._utils import get_skeletonization_model
 
 # isort: split
 sys.path.insert(0, str(Path(__file__).parent))
-from _constants import CHECKPOINT_PATH, DISTANCE_FIELD_ZARR, SKELETON_PREDICTIONS_ZARR
+from _constants import (
+    CHECKPOINT_PATH,
+    DISTANCE_FIELD_TYPE,
+    DISTANCE_FIELD_ZARR,
+    SKELETON_PREDICTIONS_ZARR,
+)
 from _parallel_utils import get_slices_for_chunk, write_batch_marker
-
-
-def predict_chunk(image: np.ndarray, model, roi_size=(192, 192, 192)) -> np.ndarray:
-    expanded = torch.from_numpy(make_image_5d(image))
-    model.eval()
-    inferer = SlidingWindowInfererAdapt(
-        roi_size=roi_size,
-        sw_device=torch.device("cuda"),
-        sw_batch_size=1,
-        overlap=0.5,
-        mode="gaussian",
-        progress=False,
-    )
-    with torch.no_grad():
-        result = inferer(inputs=expanded, network=model)
-    result_cpu = result.cpu()
-    del result
-    skel_pred = copy.deepcopy(
-        torch.squeeze(torch.squeeze(result_cpu, dim=0), dim=0).numpy()
-    )
-    del expanded, result_cpu
-    gc.collect()
-    torch.cuda.empty_cache()
-    return skel_pred
-
 
 csv_path = sys.argv[1]
 chunks_per_task = int(sys.argv[2]) if len(sys.argv) > 2 else 1
@@ -66,7 +39,10 @@ if start >= len(job_df):
     sys.exit(0)
 
 # Load model once for the whole batch
-model = SkeletonizationRegressionDynUNet.load_from_checkpoint(CHECKPOINT_PATH)
+if DISTANCE_FIELD_TYPE == "normal_field":
+    model = load_normal_field_model(CHECKPOINT_PATH)
+else:
+    model = get_skeletonization_model()
 
 input_zarrs: dict[int, zarr.Array] = {}
 output_zarrs: dict[int, zarr.Array] = {}
@@ -75,14 +51,20 @@ for chunk_id in range(start, end):
     expanded, core_in_result, core_out, scale_number = get_slices_for_chunk(job_df, chunk_id)
 
     if scale_number not in input_zarrs:
-        input_zarrs[scale_number] = zarr.open(
-            f"{DISTANCE_FIELD_ZARR}/scale{scale_number}_maxball_2", mode="r"
+        input_zarrs[scale_number] = zarr.open_array(
+            f"{DISTANCE_FIELD_ZARR}/scale{scale_number}_{DISTANCE_FIELD_TYPE}", mode="r"
         )
-        output_zarrs[scale_number] = zarr.open(
+        output_zarrs[scale_number] = zarr.open_array(
             f"{SKELETON_PREDICTIONS_ZARR}/scale{scale_number}", mode="a"
         )
 
-    result = predict_chunk(input_zarrs[scale_number][expanded], model)
+    # For normal_field the zarr is (3, Z, Y, X) — read all channels for the tile
+    if DISTANCE_FIELD_TYPE == "normal_field":
+        field = input_zarrs[scale_number][(slice(None), *expanded)]
+    else:
+        field = input_zarrs[scale_number][expanded]
+
+    result = skeletonize(field, model=model, roi_size=(192, 192, 192), progress_bar=False)
     output_zarrs[scale_number][core_out] = result[core_in_result]
     print(f"  chunk {chunk_id} (scale {scale_number}) done ({chunk_id - start + 1}/{end - start})")
 
