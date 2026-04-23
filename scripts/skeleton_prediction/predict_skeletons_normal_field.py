@@ -76,7 +76,7 @@ def compute_normal_field_zarr(
     )
     seg_dask = da.from_array(segmentation, chunks=chunk_shape)
     iteratively_process_chunks_3d(
-        input_array=seg_dask,
+        input_arrays=seg_dask,
         output_zarr=out_zarr,
         function_to_apply=field_fn,
         chunk_shape=chunk_shape,

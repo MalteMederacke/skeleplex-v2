@@ -25,9 +25,9 @@ def test_input_array_not_3d(tmp_path):
     def dummy_func(x):
         return x
 
-    with pytest.raises(ValueError, match="Input array must be 3D"):
+    with pytest.raises(ValueError, match=f"All input arrays must be 3D, got {input_array.ndim}D"):
         iteratively_process_chunks_3d(
-            input_array=input_array,
+            input_arrays=input_array,
             output_zarr=output_zarr,
             function_to_apply=dummy_func,
             chunk_shape=(5, 5, 5),
@@ -51,7 +51,7 @@ def test_chunk_shape_not_3_tuple(tmp_path):
 
     with pytest.raises(ValueError, match="chunk_shape must be a 3-tuple"):
         iteratively_process_chunks_3d(
-            input_array=input_array,
+            input_arrays=input_array,
             output_zarr=output_zarr,
             function_to_apply=dummy_func,
             chunk_shape=(5, 5),  # Only 2 elements
@@ -75,7 +75,7 @@ def test_extra_border_not_3_tuple(tmp_path):
 
     with pytest.raises(ValueError, match="extra_border must be a 3-tuple"):
         iteratively_process_chunks_3d(
-            input_array=input_array,
+            input_arrays=input_array,
             output_zarr=output_zarr,
             function_to_apply=dummy_func,
             chunk_shape=(5, 5, 5),
@@ -111,7 +111,7 @@ def test_output_with_extra_dimensions(tmp_path):
 
     # process the array
     iteratively_process_chunks_3d(
-        input_array=input_array,
+        input_arrays=input_array,
         output_zarr=output_zarr,
         function_to_apply=expand_func,
         chunk_shape=chunk_shape,
@@ -151,7 +151,7 @@ def test_processing_with_convolution(tmp_path):
 
     # process the array
     iteratively_process_chunks_3d(
-        input_array=input_array,
+        input_arrays=input_array,
         output_zarr=output_zarr,
         function_to_apply=convolve_func,
         chunk_shape=chunk_shape,
