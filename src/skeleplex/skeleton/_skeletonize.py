@@ -1,89 +1,127 @@
+import gc
+import warnings
+from pathlib import Path
 from typing import Literal
 
 import dask.array as da
 import numpy as np
 import torch
-from monai.inferers import sliding_window_inference
-from morphospaces.networks.multiscale_skeletonization import (
-    MultiscaleSkeletonizationNet,
-)
 from tqdm import tqdm
 
 from skeleplex.skeleton._utils import get_skeletonization_model, make_image_5d
 
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    from monai.inferers import SlidingWindowInfererAdapt
+
+_AnyModel = torch.nn.Module
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def load_normal_field_model(checkpoint_path: Path | str) -> _AnyModel:
+    """Load a SkeletonizationRegressionDynUNet from a checkpoint.
+
+    Parameters
+    ----------
+    checkpoint_path : Path or str
+        Path to a .ckpt file from a normal-field training run.
+    """
+    from morphospaces.networks.skeletonization import SkeletonizationRegressionDynUNet
+
+    return SkeletonizationRegressionDynUNet.load_from_checkpoint(
+        str(checkpoint_path),
+        in_channels=3,
+        out_channels=1,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Single-volume inference
+# ---------------------------------------------------------------------------
+
 
 def skeletonize(
     image: np.ndarray,
-    model: Literal["pretrained"] | MultiscaleSkeletonizationNet = "pretrained",
+    model: Literal["pretrained"] | _AnyModel = "pretrained",
     roi_size: tuple[int, int, int] = (120, 120, 120),
     overlap: float = 0.5,
     stitching_mode: str = "gaussian",
     progress_bar: bool = True,
     batch_size: int = 1,
 ) -> np.ndarray:
-    """Skeletonize a normalized distance field image.
+    """Skeletonize an image using sliding-window inference.
+
+    Accepts either a 3-D normalized distance field ``(Z, Y, X)`` or a 4-D
+    normal field ``(C, Z, Y, X)``.  The channel dimension is inferred from the
+    array shape and the correct batch tensor is built automatically, so the
+    same function works with any model.
 
     Parameters
     ----------
     image : np.ndarray
-        The input image to skeletonize.
-        This should be a normalized distance field image.
-    model : Literal["pretrained"] | MultiscaleSkeletonizationNet = "pretrained",
-        The model to use for prediction. This can either be an instance of
-        MultiscaleSkeletonizationNet or the string "pretrained". If "pretrained",
-        a pretrained model will be downloaded from the SkelePlex repository and used.
-        Default value is "pretrained".
+        Input array, shape ``(Z, Y, X)`` or ``(C, Z, Y, X)``.
+    model : "pretrained" or torch.nn.Module
+        Model to use.  ``"pretrained"`` downloads the default weights.
     roi_size : tuple[int, int, int]
-        The size of each tile to predict on.
-        The default value is (120, 120, 120).
+        Sliding-window tile size. Default (120, 120, 120).
     overlap : float
-        The amount of overlap between tiles.
-        Should be between 0 and 1.
-        Default value is 0.5.
+        Fractional overlap between tiles. Default 0.5.
     stitching_mode : str
-        The method to use to stitch overlapping tiles.
-        Should be "gaussian" or "constant".
-        "gaussian" uses a Gaussian kernel to weight the overlapping regions.
-        "constant" uses equal weight across overlapping regions.
-        "gaussian" is the default.
+        Tile blending: "gaussian" or "constant". Default "gaussian".
     progress_bar : bool
-        Displays a progress bar during the prediction when set to True.
-        Default is True.
+        Show inference progress. Default True.
     batch_size : int
-        The number of tiles to predict at once.
-        Default value is 1.
-    """
-    # add dim -> NCZYX
-    expanded_image = torch.from_numpy(make_image_5d(image))
+        Tiles per forward pass. Default 1.
 
-    # get the skeletonziation model if requested
+    Returns
+    -------
+    np.ndarray
+        Skeleton prediction, shape (Z, Y, X).
+    """
+    if image.ndim == 3:
+        tensor = torch.from_numpy(make_image_5d(image))   # (1, 1, Z, Y, X)
+    elif image.ndim == 4:
+        tensor = torch.from_numpy(image[np.newaxis])       # (1, C, Z, Y, X)
+    else:
+        raise ValueError(f"Expected 3-D or 4-D array, got shape {image.shape}")
+
     if model == "pretrained":
         model = get_skeletonization_model()
 
-    # put the model in eval mode
     model.eval()
+    inferer = SlidingWindowInfererAdapt(
+        roi_size=roi_size,
+        sw_device=torch.device("cuda"),
+        sw_batch_size=batch_size,
+        overlap=overlap,
+        mode=stitching_mode,
+        progress=progress_bar,
+    )
 
-    # make the prediction
     with torch.no_grad():
-        result = sliding_window_inference(
-            inputs=expanded_image,
-            sw_batch_size=batch_size,
-            sw_device=torch.device("cuda"),
-            predictor=model,
-            roi_size=roi_size,
-            overlap=overlap,
-            mode=stitching_mode,
-            device=torch.device("cpu"),
-            progress=progress_bar,
-        )
+        result = inferer(inputs=tensor, network=model)
 
-    # squeeze dims -> ZYX
-    return torch.squeeze(torch.squeeze(result, dim=0), dim=0).numpy()
+    skel_pred = torch.squeeze(torch.squeeze(result.cpu(), dim=0), dim=0).numpy()
+
+    del tensor, result
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    return skel_pred
+
+
+# ---------------------------------------------------------------------------
+# Chunkwise inference
+# ---------------------------------------------------------------------------
 
 
 def skeletonize_chunkwise(
     input_dask_array: da.Array,
-    model: str | MultiscaleSkeletonizationNet = "pretrained",
+    model: str | _AnyModel = "pretrained",
     chunk_size: tuple[int, int, int] = (512, 512, 512),
     roi_size: tuple[int, int, int] = (120, 120, 120),
     padding: tuple[int, int, int] = (60, 60, 60),
@@ -91,42 +129,50 @@ def skeletonize_chunkwise(
     stitching_mode: str = "gaussian",
     batch_size: int = 1,
 ) -> da.Array:
-    """
-    Skeletonize a large volume chunk by chunk using SkelePlex's skeletonize().
+    """Skeletonize a large volume chunk by chunk.
+
+    Works with any model — pass the model directly or ``"pretrained"`` to load
+    the default weights.  Accepts both 3-D ``(Z, Y, X)`` and 4-D
+    ``(C, Z, Y, X)`` dask arrays; spatial chunking always operates on the last
+    three dimensions.
 
     Parameters
     ----------
     input_dask_array : dask.array.Array
-        Normalized distance field as a Dask array.
-    model : str or MultiscaleSkeletonizationNet, optional
-        The model to use for skeletonization.
-        If "pretrained", a pretrained model will be used.
-        Default is "pretrained".
+        Input array, shape (Z, Y, X) or (C, Z, Y, X).
+    model : str or torch.nn.Module
+        Model for skeletonization. ``"pretrained"`` loads the default weights.
     chunk_size : tuple
-        Size of each chunk to process.
+        Spatial size of each core chunk.
     roi_size : tuple
-        ROI size for sliding window inference.
+        ROI size for sliding-window inference.
     padding : tuple
-        Overlap margin in each direction.
+        Spatial overlap margin added around each chunk.
     overlap : float
-        Sliding window overlap for each chunk.
+        Sliding-window overlap within each chunk.
     stitching_mode : str
         Stitching mode for overlapping patches.
     batch_size : int
-        Sliding window batch size.
+        Sliding-window batch size.
 
     Returns
     -------
     dask.array.Array
-        Skeleton prediction as a Dask array.
+        Skeleton prediction, shape (Z, Y, X).
     """
-    model = get_skeletonization_model()
+    if model == "pretrained":
+        model = get_skeletonization_model()
 
-    image_dask = input_dask_array
-    image_shape = image_dask.shape
+    ndim = input_dask_array.ndim
+    if ndim == 3:
+        spatial_shape = input_dask_array.shape
+    elif ndim == 4:
+        spatial_shape = input_dask_array.shape[1:]
+    else:
+        raise ValueError(f"Expected 3-D or 4-D array, got {ndim}-D")
 
     start_indices = [
-        range(0, s, cs) for s, cs in zip(image_shape, chunk_size, strict=False)
+        range(0, s, cs) for s, cs in zip(spatial_shape, chunk_size, strict=True)
     ]
     depth_chunks = []
 
@@ -138,14 +184,16 @@ def skeletonize_chunkwise(
                 z0 = max(z_start - padding[0], 0)
                 y0 = max(y_start - padding[1], 0)
                 x0 = max(x_start - padding[2], 0)
+                z1 = min(z_start + chunk_size[0] + padding[0], spatial_shape[0])
+                y1 = min(y_start + chunk_size[1] + padding[1], spatial_shape[1])
+                x1 = min(x_start + chunk_size[2] + padding[2], spatial_shape[2])
 
-                z1 = min(z_start + chunk_size[0] + padding[0], image_shape[0])
-                y1 = min(y_start + chunk_size[1] + padding[1], image_shape[1])
-                x1 = min(x_start + chunk_size[2] + padding[2], image_shape[2])
+                if ndim == 3:
+                    padded_chunk = input_dask_array[z0:z1, y0:y1, x0:x1].compute()
+                else:
+                    padded_chunk = input_dask_array[:, z0:z1, y0:y1, x0:x1].compute()
 
-                padded_chunk = image_dask[z0:z1, y0:y1, x0:x1].compute()
-
-                predicted_skeleton = skeletonize(
+                predicted = skeletonize(
                     padded_chunk,
                     model=model,
                     roi_size=roi_size,
@@ -155,73 +203,17 @@ def skeletonize_chunkwise(
                     batch_size=batch_size,
                 )
 
-                crop_z0 = z_start - z0
-                crop_y0 = y_start - y0
-                crop_x0 = x_start - x0
+                cz0 = z_start - z0
+                cy0 = y_start - y0
+                cx0 = x_start - x0
+                cz1 = cz0 + min(chunk_size[0], spatial_shape[0] - z_start)
+                cy1 = cy0 + min(chunk_size[1], spatial_shape[1] - y_start)
+                cx1 = cx0 + min(chunk_size[2], spatial_shape[2] - x_start)
 
-                crop_z1 = crop_z0 + min(chunk_size[0], image_shape[0] - z_start)
-                crop_y1 = crop_y0 + min(chunk_size[1], image_shape[1] - y_start)
-                crop_x1 = crop_x0 + min(chunk_size[2], image_shape[2] - x_start)
-
-                cropped_skeleton_prediction = predicted_skeleton[
-                    crop_z0:crop_z1,
-                    crop_y0:crop_y1,
-                    crop_x0:crop_x1,
-                ]
-
-                skeleton_chunk = da.from_array(
-                    cropped_skeleton_prediction,
-                    chunks=cropped_skeleton_prediction.shape,
-                )
-                width_chunks.append(skeleton_chunk)
+                cropped = predicted[cz0:cz1, cy0:cy1, cx0:cx1]
+                width_chunks.append(da.from_array(cropped, chunks=cropped.shape))
 
             height_chunks.append(da.concatenate(width_chunks, axis=2))
-        depth_chunk = da.concatenate(height_chunks, axis=1)
-        depth_chunks.append(depth_chunk)
+        depth_chunks.append(da.concatenate(height_chunks, axis=1))
 
-    skeleton_prediction = da.concatenate(depth_chunks, axis=0)
-    return skeleton_prediction
-
-
-def threshold_skeleton(skeleton: da.Array, threshold: float) -> da.Array:
-    """
-    Threshold a skeleton prediction to produce a binary skeleton mask.
-
-    Parameters
-    ----------
-    skeleton : dask.array.Array
-        Input skeleton prediction array (e.g. probabilities).
-    threshold : float
-        Threshold value to binarize the skeleton prediction.
-
-    Returns
-    -------
-    dask.array.Array
-        Binary skeleton mask as uint8.
-    """
-    return (skeleton > threshold).astype("uint8")
-
-
-def filter_skeleton_by_segmentation(
-    skeleton: da.Array,
-    segmentation: da.Array,
-) -> da.Array:
-    """
-    Mask a predicted skeleton using a segmentation mask.
-
-    Parameters
-    ----------
-    skeleton : dask.array.Array
-        Skeleton prediction image (usually float-valued).
-    segmentation : dask.array.Array
-        Binary segmentation mask with same shape as skeleton.
-
-    Returns
-    -------
-    dask.array.Array
-        Masked skeleton image (same dtype as skeleton).
-    """
-    if skeleton.shape != segmentation.shape:
-        raise ValueError("Skeleton and segmentation shapes do not match.")
-
-    return skeleton * segmentation.astype(np.float32)
+    return da.concatenate(depth_chunks, axis=0)

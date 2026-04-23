@@ -7,27 +7,27 @@ import numpy as np
 import zarr
 from tqdm import tqdm
 
-
 def iteratively_process_chunks_3d(
-    input_array: da.Array,
+    input_arrays: da.Array | tuple[da.Array, ...],
     output_zarr: zarr.Array,
-    function_to_apply: Callable[[np.ndarray], np.ndarray],
+    function_to_apply: Callable[..., np.ndarray],
     chunk_shape: tuple[int, int, int],
     extra_border: tuple[int, int, int],
     *args,
     **kwargs,
 ):
-    """Apply a function to each chunk of a Dask array with extra border handling.
+    """Apply a function to each chunk of one or more Dask arrays with extra border handling.
 
-    no
+    Parameters
     ----------
-    input_array : dask.array.Array
-        The input Dask array to process. Must be 3D.
+    input_arrays : da.Array or tuple[da.Array, ...]
+        A single Dask array or a tuple of Dask arrays to process.
+        All arrays must be 3D and share the same shape.
     output_zarr : zarr.Array
         The output Zarr array to write results to.
-        Must have the same shape as input_array.
-    function_to_apply : Callable[[np.ndarray], np.ndarray]
-        The function to apply to each chunk.
+    function_to_apply : Callable[..., np.ndarray]
+        The function to apply to each chunk. Receives one positional
+        np.ndarray argument per input array, followed by *args and **kwargs.
     chunk_shape : tuple[int, int, int]
         The shape of each chunk to process.
     extra_border : tuple[int, int, int]
@@ -37,9 +37,23 @@ def iteratively_process_chunks_3d(
     **kwargs
         Additional keyword arguments to pass to function_to_apply.
     """
-    # validate inputs before processing
-    if input_array.ndim != 3:
-        raise ValueError(f"Input array must be 3D, got {input_array.ndim}D")
+    # normalise to a list of arrays
+    if isinstance(input_arrays, da.Array):
+        input_arrays = (input_arrays,)
+
+    # validate inputs
+    if len(input_arrays) == 0:
+        raise ValueError("At least one input array is required")
+
+    array_shape = input_arrays[0].shape
+    for arr in input_arrays:
+        if arr.ndim != 3:
+            raise ValueError(f"All input arrays must be 3D, got {arr.ndim}D")
+        if arr.shape != array_shape:
+            raise ValueError(
+                f"All input arrays must have the same shape, "
+                f"got {arr.shape} and {array_shape}"
+            )
 
     if len(chunk_shape) != 3:
         raise ValueError(
@@ -52,7 +66,6 @@ def iteratively_process_chunks_3d(
         )
 
     # calculate the chunk grid
-    array_shape = input_array.shape
     n_chunks = tuple(int(np.ceil(array_shape[i] / chunk_shape[i])) for i in range(3))
 
     total_chunks = n_chunks[0] * n_chunks[1] * n_chunks[2]
@@ -68,16 +81,15 @@ def iteratively_process_chunks_3d(
                         j * chunk_shape[1],
                         k * chunk_shape[2],
                     )
-                    core_end = (
-                        min((i + 1) * chunk_shape[0], array_shape[0]),
-                        min((j + 1) * chunk_shape[1], array_shape[1]),
-                        min((k + 1) * chunk_shape[2], array_shape[2]),
+                    core_end = tuple(
+                        min((idx + 1) * chunk_shape[dim], array_shape[dim])
+                        for dim, idx in enumerate((i, j, k))
                     )
                     core_slice = tuple(
                         slice(core_start[dim], core_end[dim]) for dim in range(3)
                     )
 
-                    # calculate expanded slice (chunk + border)
+                    # calculate expanded slice (chunk + border),
                     # clipped to array boundaries
                     expanded_start = tuple(
                         max(0, core_start[dim] - extra_border[dim]) for dim in range(3)
@@ -91,18 +103,21 @@ def iteratively_process_chunks_3d(
                         for dim in range(3)
                     )
 
-                    # calculate actual border used (may be smaller at edges)
                     actual_border_before = tuple(
                         core_start[dim] - expanded_start[dim] for dim in range(3)
                     )
 
-                    # extract chunk + border and compute
-                    chunk_with_border = input_array[expanded_slice].compute()
+                    # extract chunk + border for each input array
+                    chunks_with_border = [
+                        arr[expanded_slice].compute() for arr in input_arrays
+                    ]
 
-                    # apply function
-                    processed = function_to_apply(chunk_with_border, *args, **kwargs)
+                    # apply function (unpack so each array is a positional arg)
+                    processed = function_to_apply(
+                        *chunks_with_border, *args, **kwargs
+                    )
 
-                    # extend slice to match output_array_shape array dimensions
+                    # slice out the core region from the result
                     core_in_result_slice = [
                         slice(
                             actual_border_before[dim],
@@ -113,28 +128,21 @@ def iteratively_process_chunks_3d(
                     ]
 
                     # if the processed array has extra dims (e.g., channels/features),
-                    # extend the slice with full slices for those dimensions
+                    # prepend full slices for those dimensions
                     n_extra_dims = processed.ndim - 3
-                    # dimensions beyond the first 3
                     if n_extra_dims > 0:
                         extra_slices = [
                             slice(0, processed.shape[dim_idx])
                             for dim_idx in range(n_extra_dims)
                         ]
-
-                        # this is used to slice the processed array
                         core_in_result_slice = extra_slices + core_in_result_slice
-                        # this is used slice the output array into which we write
                         core_slice_extended = extra_slices + list(core_slice)
                     else:
-                        # if no extra dims, just use the 3D slices
                         core_slice_extended = list(core_slice)
 
-                    # convert back to tuple
                     core_in_result_slice = tuple(core_in_result_slice)
                     core_slice_extended = tuple(core_slice_extended)
 
-                    # check if end dimensions match input
                     if processed.ndim != len(core_in_result_slice):
                         raise ValueError(
                             "The output of function_to_apply has "
@@ -142,8 +150,6 @@ def iteratively_process_chunks_3d(
                         )
 
                     core_result = processed[core_in_result_slice]
-
-                    # write to Zarr
                     output_zarr[core_slice_extended] = core_result
 
 
