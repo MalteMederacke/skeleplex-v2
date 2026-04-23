@@ -8,6 +8,7 @@ https://github.com/GenevieveBuckley/distributed-skeleton-analysis
 import functools
 import operator
 from itertools import product
+from typing import Literal
 
 import dask.array as da
 import dask.dataframe as dd
@@ -15,6 +16,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import scipy.ndimage
+import zarr
 from dask import compute, delayed
 from dask.array.slicing import cached_cumsum
 from dask_image.ndfilters import convolve
@@ -23,6 +25,8 @@ from scipy import sparse
 from skan import Skeleton, summarize
 from skan.csr import _build_skeleton_path_graph, _write_pixel_graph, csr_to_nbgraph
 from skan.nputil import raveled_steps_to_neighbors
+
+from skeleplex.skeleton._chunked_label import label_chunks_parallel
 
 
 def compute_degrees(skeleton_image: da.Array) -> da.Array:
@@ -118,6 +122,68 @@ def assign_unique_ids(
     )
 
     return labeled_skeleton, num_features
+
+def assign_unique_ids_parallel(
+    input_path: str,
+    output_path: str,
+    chunk_shape: tuple[int, ...],
+    n_processes: int = 4,
+    pool_type: Literal["spawn", "fork", "forkserver", "thread"] = "fork",
+    backend: Literal["cpu", "cupy"] = "cpu",
+    structure: np.ndarray | None = None,
+) -> tuple[da.Array, int]:
+    """
+    Assign a unique integer ID to every skeleton voxel using parallel chunk labeling.
+
+    This is a parallelized replacement for
+    :func:`skeleplex.graph.image_to_graph_lazy.assign_unique_ids`. Each foreground
+    voxel is treated as its own connected component so that downstream graph
+    construction receives a distinct integer per voxel.
+
+    Parameters
+    ----------
+    input_path : str
+        Path to the input binary skeleton zarr array.
+    output_path : str
+        Path where the labeled output zarr array will be written.
+    chunk_shape : tuple of int
+        Shape of the chunks used for parallel processing.
+    n_processes : int, default=4
+        Number of parallel worker processes/threads.
+    pool_type : {'spawn', 'fork', 'forkserver', 'thread'}, default='fork'
+        Multiprocessing context. 'fork' is fastest on Linux/macOS.
+    backend : {'cpu', 'cupy'}, default='cpu'
+        Compute backend. Use 'cupy' for GPU acceleration.
+    structure : np.ndarray or None, optional
+        Structuring element for the labeling step. Defaults to a center-only
+        kernel (no neighbor connectivity) so that every voxel gets a unique ID.
+        Override only if you need different connectivity semantics.
+
+    Returns
+    -------
+    labeled_array : dask.array.Array
+        Dask array backed by the output zarr, with a unique integer per voxel.
+    n_labels : int
+        Total number of unique labels (= number of skeleton voxels).
+    """
+    if structure is None:
+        input_zarr = zarr.open(input_path, mode="r")
+        ndim = input_zarr.ndim
+        structure = np.zeros((3,) * ndim, dtype=np.uint8)
+        structure[(1,) * ndim] = 1
+
+    n_labels = label_chunks_parallel(
+        input_path=input_path,
+        output_path=output_path,
+        chunk_shape=chunk_shape,
+        n_processes=n_processes,
+        pool_type=pool_type,
+        backend=backend,
+        structure=structure,
+    )
+
+    labeled_array = da.from_zarr(output_path)
+    return labeled_array, n_labels
 
 
 @delayed

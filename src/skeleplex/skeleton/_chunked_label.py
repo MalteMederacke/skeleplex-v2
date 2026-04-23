@@ -1,15 +1,17 @@
+import os
 from functools import partial
 from itertools import product
 from multiprocessing import Lock, Value, get_context
 from multiprocessing.pool import ThreadPool
 from typing import Literal
 
+import dask.array as da
 import numpy as np
 import zarr
 from scipy.ndimage import binary_dilation, generate_binary_structure
+from scipy.ndimage import label as scipy_label
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
-from skimage.measure import label
 
 from skeleplex.utils import get_boundary_slices
 
@@ -68,7 +70,10 @@ def create_chunk_slices(
 
 
 def _label_chunk_with_offset(
-    chunk_slices: tuple[slice, ...], input_path: str, output_path: str
+    chunk_slices: tuple[slice, ...],
+    input_path: str,
+    output_path: str,
+    structure: np.ndarray | None = None,
 ) -> tuple[tuple[slice, ...], int]:
     """
     Process a single chunk: label connected components and apply offset.
@@ -84,6 +89,9 @@ def _label_chunk_with_offset(
         Path to input zarr array
     output_path : str
         Path to output zarr array
+    structure : np.ndarray or None, optional
+        Structuring element passed to scipy.ndimage.label. None uses full
+        (26-connectivity for 3D) connectivity, matching the previous default.
 
     Returns
     -------
@@ -96,9 +104,9 @@ def _label_chunk_with_offset(
     input_zarr = zarr.open(input_path, mode="r")
     chunk_data = input_zarr[chunk_slices]
 
-    # Label connected components (returns 0 for background)
-    labeled_chunk = label(chunk_data)
-    max_label = int(labeled_chunk.max())
+    if structure is None:
+        structure = generate_binary_structure(chunk_data.ndim, chunk_data.ndim)
+    labeled_chunk, max_label = scipy_label(chunk_data, structure=structure)
 
     # Get offset atomically and update counter
     with _counter_lock:
@@ -118,7 +126,10 @@ def _label_chunk_with_offset(
 
 
 def _label_chunk_with_offset_gpu(
-    chunk_slices: tuple[slice, ...], input_path: str, output_path: str
+    chunk_slices: tuple[slice, ...],
+    input_path: str,
+    output_path: str,
+    structure: np.ndarray | None = None,
 ) -> tuple[tuple[slice, ...], int]:
     """
     Process a single chunk on GPU: label connected components and apply offset.
@@ -134,6 +145,10 @@ def _label_chunk_with_offset_gpu(
         Path to input zarr array
     output_path : str
         Path to output zarr array
+    structure : np.ndarray or None, optional
+        Structuring element for connectivity. None uses full (26-connectivity
+        for 3D) connectivity, matching the previous default. Numpy arrays are
+        transferred to the GPU automatically.
 
     Returns
     -------
@@ -141,7 +156,9 @@ def _label_chunk_with_offset_gpu(
         (chunk_slices, max_label) for logging/debugging
     """
     import cupy as cp
-    from cupyx.scipy.ndimage import generate_binary_structure
+    from cupyx.scipy.ndimage import (
+        generate_binary_structure as cupy_generate_binary_structure,
+    )
     from cupyx.scipy.ndimage import label as cupy_label
 
     global _offset_counter, _counter_lock
@@ -153,12 +170,15 @@ def _label_chunk_with_offset_gpu(
     # Transfer to GPU
     chunk_data_gpu = cp.asarray(chunk_data)
 
-    # Create 26-connectivity structuring element (3x3x3 with all True)
-    structure = generate_binary_structure(rank=3, connectivity=3)
+    if structure is None:
+        structure_gpu = cupy_generate_binary_structure(
+            rank=chunk_data.ndim, connectivity=chunk_data.ndim
+        )
+    else:
+        structure_gpu = cp.asarray(structure)
 
-    # Label connected components with 26-connectivity
-    labeled_chunk_gpu, num_features = cupy_label(chunk_data_gpu, structure=structure)
-    max_label = int(labeled_chunk_gpu.max())
+    labeled_chunk_gpu, max_label = cupy_label(chunk_data_gpu, structure=structure_gpu)
+    max_label = int(max_label)
 
     # Get offset atomically and update counter
     with _counter_lock:
@@ -185,6 +205,7 @@ def label_chunks_parallel(
     n_processes: int = 4,
     pool_type: Literal["spawn", "fork", "forkserver", "thread"] = "fork",
     backend: Literal["cpu", "cupy"] = "cpu",
+    structure: np.ndarray | None = None,
 ) -> int:
     """
     Label connected components in a large zarr image using parallel processing.
@@ -209,6 +230,10 @@ def label_chunks_parallel(
     backend : {'cpu', 'cupy'}, default='cpu'
         Backend to use for labeling. 'cpu' uses CPU-based labeling,
         'cupy' uses GPU-based labeling with CuPy. Default is 'cpu'.
+    structure : np.ndarray or None, optional
+        Structuring element passed to the labeling function. None uses full
+        connectivity (26-connectivity for 3D). Pass a center-only array to
+        treat each voxel as its own component (for skeleton unique-ID assignment).
 
     Returns
     -------
@@ -262,11 +287,17 @@ def label_chunks_parallel(
     # Create the processing function
     if backend == "cpu":
         process_func = partial(
-            _label_chunk_with_offset, input_path=input_path, output_path=output_path
+            _label_chunk_with_offset,
+            input_path=input_path,
+            output_path=output_path,
+            structure=structure,
         )
     elif backend == "cupy":
         process_func = partial(
-            _label_chunk_with_offset_gpu, input_path=input_path, output_path=output_path
+            _label_chunk_with_offset_gpu,
+            input_path=input_path,
+            output_path=output_path,
+            structure=structure,
         )
     else:
         raise ValueError(f"Unsupported backend: {backend}")
@@ -852,3 +883,68 @@ def _copy_chunk(
 
     # Copy chunk
     output_zarr[chunk_slice] = input_zarr[chunk_slice]
+
+
+def label_and_merge(
+    input_path: str,
+    output_path: str,
+    chunk_shape: tuple[int, ...],
+    tmp_dir: str,
+    n_label_processes: int = 4,
+    n_merge_processes: int = 4,
+    pool_type: Literal["spawn", "fork", "forkserver", "thread"] = "fork",
+    backend: Literal["cpu", "cupy"] = "cpu",
+    structure: np.ndarray | None = None,
+) -> None:
+    """
+    Label connected components chunk-by-chunk, then merge labels across boundaries.
+
+    Runs :func:`label_chunks_parallel` into a temporary intermediate zarr stored
+    in *tmp_dir*, then calls :func:`merge_touching_labels` to stitch labels that
+    span chunk boundaries into the final output.
+
+    Parameters
+    ----------
+    input_path : str
+        Path to the input binary segmentation zarr array.
+    output_path : str
+        Path where the merged labeled output zarr array will be written.
+    chunk_shape : tuple of int
+        Shape of the chunks used for both labeling and merging.
+    tmp_dir : str
+        Directory for the intermediate (unmerged) labeled zarr.
+        Created automatically if it does not exist.
+    n_label_processes : int, default=4
+        Number of worker processes for the labeling step.
+    n_merge_processes : int, default=4
+        Number of worker processes for the merging step.
+    pool_type : {'spawn', 'fork', 'forkserver', 'thread'}, default='fork'
+        Multiprocessing context used for both steps.
+    backend : {'cpu', 'cupy'}, default='cpu'
+        Compute backend for both steps. Use 'cupy' for GPU acceleration.
+    structure : np.ndarray or None, optional
+        Structuring element for the labeling step. None uses full connectivity
+        (26-connectivity for 3D).
+    """
+    os.makedirs(tmp_dir, exist_ok=True)
+    labeled_tmp_path = os.path.join(tmp_dir, "labeled_unmerged.zarr")
+
+    max_label_value = label_chunks_parallel(
+        input_path=input_path,
+        output_path=labeled_tmp_path,
+        chunk_shape=chunk_shape,
+        n_processes=n_label_processes,
+        pool_type=pool_type,
+        backend=backend,
+        structure=structure,
+    )
+
+    merge_touching_labels(
+        label_image_path=labeled_tmp_path,
+        output_image_path=output_path,
+        chunk_shape=chunk_shape,
+        max_label_value=max_label_value,
+        n_processes=n_merge_processes,
+        pool_type=pool_type,
+        backend=backend,
+    )
