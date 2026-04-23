@@ -31,13 +31,22 @@ def test_merge_edge(straight_edge_graph):
     assert original_attributes == merged_attributes
 
 
-def test_delete_edge(simple_t_skeleton_graph):
+def test_delete_edge_directed(simple_t_skeleton_graph):
     """Test deleting an edge."""
 
     delete_edge(simple_t_skeleton_graph, (1, 3))
 
     assert simple_t_skeleton_graph.graph.number_of_edges() == 1
     assert list(simple_t_skeleton_graph.graph.edges) == [(0, 2)]
+
+def test_delete_edge_undirected(simple_t_skeleton_graph):
+    """Test deleting an edge."""
+    simple_t_skeleton_graph.graph = simple_t_skeleton_graph.graph.to_undirected()
+    delete_edge(simple_t_skeleton_graph, (1, 3))
+
+    assert simple_t_skeleton_graph.graph.number_of_edges() == 1
+    assert list(simple_t_skeleton_graph.graph.edges) == [(0, 2)]
+
 
 
 def test_length_pruning(simple_t_skeleton_graph):

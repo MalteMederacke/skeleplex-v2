@@ -195,8 +195,6 @@ def delete_edge(skeleton_graph: SkeletonGraph, edge: tuple[int, int]):
         The edge to delete.
     """
     # check if directed
-    if not skeleton_graph.graph.is_directed():
-        ValueError("Graph is not directed. Convert to directed graph.")
     # copy graph
     graph = skeleton_graph.graph.copy()
     graph.remove_edge(*edge)
@@ -210,21 +208,31 @@ def delete_edge(skeleton_graph: SkeletonGraph, edge: tuple[int, int]):
                 skeleton_graph.graph.remove_node(node)
             # merge edges if node has degree 2
             elif skeleton_graph.graph.degree(node) == 2:
-                # merge
-                in_edge = list(skeleton_graph.graph.in_edges(node))
-                out_edge = list(skeleton_graph.graph.out_edges(node))
-                if len(in_edge) == 0:
-                    raise ValueError(
-                        ("Deleting the edge would break the graph"),
-                        "Are you trying to delete the origin?",
-                    )
+                if skeleton_graph.graph.is_directed():
 
-                merge_edge(skeleton_graph, in_edge[0][0], node, out_edge[0][1])
-                logger.info("merge")
+                    # merge
+                    in_edge = list(skeleton_graph.graph.in_edges(node))
+                    out_edge = list(skeleton_graph.graph.out_edges(node))
+                    if len(in_edge) == 0:
+                        raise ValueError(
+                            ("Deleting the edge would break the graph"),
+                            "Are you trying to delete the origin?",
+                        )
+
+                    merge_edge(skeleton_graph, in_edge[0][0], node, out_edge[0][1])
+                    logger.info("merge")
+                else:
+                    neighbors = list(skeleton_graph.graph.neighbors(node))
+                    if len(neighbors) != 2:
+                        raise ValueError(
+                            "Node should have exactly 2 neighbors for merging"
+                        )
+                    # For undirected graphs, merge the two neighbors through this node
+                    merge_edge(skeleton_graph, neighbors[0], node, neighbors[1])
+                    logger.info("merge")
 
     # check if graph is still connected, if not remove orphaned nodes
     skeleton_graph.graph.remove_nodes_from(list(nx.isolates(skeleton_graph.graph)))
-    # skeleton_graph.graph = graph
 
 
 def length_pruning(skeleton_graph: SkeletonGraph, length_threshold: int):
@@ -239,10 +247,6 @@ def length_pruning(skeleton_graph: SkeletonGraph, length_threshold: int):
 
 
     """
-    # check if directed
-    if not skeleton_graph.graph.is_directed():
-        ValueError("Graph is not directed. Convert to directed graph.")
-
     graph = skeleton_graph.graph
     g_unmodified = graph.copy()
 
