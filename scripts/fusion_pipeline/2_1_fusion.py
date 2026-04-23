@@ -11,21 +11,21 @@ from skeleplex.skeleton.fusion.scale_image import scale_image
 
 # isort: split
 sys.path.insert(0, str(Path(__file__).parent))
-from _constants import INPUT_IMAGE_PATH, SCALED_IMAGE_ZARR
+from _constants import INPUT_IMAGE_PATH, SCALE_RANGES_MANUAL, SCALED_IMAGE_ZARR
 
 lung_image = da.from_zarr(INPUT_IMAGE_PATH)
 lung_image = lung_image.rechunk((96, 96, 96))
 
-
 parser = argparse.ArgumentParser()
-parser.add_argument("--job-index", type=int)
-parser.add_argument("--job-index-offset", type=int)
+parser.add_argument(
+    "--job-index", type=int, required=True,
+    help="SLURM array task ID — indexes into sorted scale list",
+)
 args = parser.parse_args()
 
-scale_number = args.job_index - args.job_index_offset
-print("Job Index: ", args.job_index)
-print("Job Index Offset: ", args.job_index_offset)
-print("Scale number: ", scale_number)
+scales = sorted(SCALE_RANGES_MANUAL.keys())
+scale_number = scales[args.job_index]
+print(f"Job index: {args.job_index}, scale number: {scale_number}")
 
 start_time = time.time()
 scale_image(lung_image, zarr_root=SCALED_IMAGE_ZARR, scale_number=scale_number)

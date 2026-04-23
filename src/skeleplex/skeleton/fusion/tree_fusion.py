@@ -7,7 +7,7 @@ def fused_tree_generator(
     image: np.ndarray,
     scale_ranges: dict,
     scaled_images_dict: dict,
-    image_prefix: str
+    output_path: str,
 ) -> np.ndarray:
     """
     Generate Optimal Tree.
@@ -30,9 +30,8 @@ def fused_tree_generator(
         in the radius_map.
     scaled_images_dict : dict
         Dictionary containing all re-scaled skeleton predictions.
-    image_prefix : str
-        Prefix for the image files.
-
+    output_path : str
+        Path to write the fused tree zarr.
 
     Returns
     -------
@@ -43,16 +42,15 @@ def fused_tree_generator(
     """
     fused_tree = da.zeros_like(image, dtype=image.dtype)
 
-    for key in scale_ranges.keys():
-        scale_number = key
+    for scale_number in scale_ranges.keys():
         print("Processing scale number: ", scale_number)
 
         mask = scale_map == scale_number
-        name = f"{image_prefix}_image_skeletonized_rescaled_from_{scale_number}"
+        name = f"image_skeletonized_rescaled_from_{scale_number}"
         print(name)
 
         scaled_images_dict[name] = scaled_images_dict[name].rechunk(scale_map.chunks)
         fused_tree = da.where(mask, scaled_images_dict[name], fused_tree)
 
-    fused_tree.to_zarr(f"/data/{image_prefix}_fused_tree.zarr", mode="w")
+    fused_tree.to_zarr(output_path, mode="w")
     return fused_tree

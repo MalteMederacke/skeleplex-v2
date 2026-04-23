@@ -54,7 +54,8 @@ print(f"--- Loading all images took {time.time() - start_time1} seconds ---")
 # Combine rescaled images via scale map to generate optimal tree
 start_time2 = time.time()
 fused_tree_generator(
-    lung_image_scale_map, lung_image, scale_ranges_manual, multiscale_images
+    lung_image_scale_map, lung_image, scale_ranges_manual, multiscale_images,
+    output_path=FUSED_TREE_PATH,
 )
 print(f"--- Generating optimal tree took {time.time() - start_time2} seconds ---")
 

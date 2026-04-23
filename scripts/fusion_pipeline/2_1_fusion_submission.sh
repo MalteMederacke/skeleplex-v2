@@ -10,8 +10,6 @@
 cd "$SLURM_SUBMIT_DIR"
 source "$SLURM_SUBMIT_DIR/env.sh"
 
-JOB_INDEX_OFFSET=3  # ADAPT HERE: offset such that array_task_id + offset = scale_number
-
-python 2_1_fusion.py --job-index $SLURM_ARRAY_TASK_ID --job-index-offset $JOB_INDEX_OFFSET
+python 2_1_fusion.py --job-index $SLURM_ARRAY_TASK_ID
 
 echo "Job completed: $(date)"
