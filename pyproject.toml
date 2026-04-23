@@ -84,8 +84,9 @@ dev = [
 ]
 # dependencies for docs
 docs = [
-    "mkdocs-material",
-    "mkdocstrings-python",
+    "mkdocs-material>=9.5,<10",
+    "mkdocstrings[python]>=0.26,<0.28",
+    "mkdocstrings-python>=1.10,<1.16",
     "mkdocs-literate-nav",
     "mkdocs-gen-files",
     "mkdocs-section-index"
