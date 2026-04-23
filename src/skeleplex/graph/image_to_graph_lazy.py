@@ -7,7 +7,10 @@ https://github.com/GenevieveBuckley/distributed-skeleton-analysis
 
 import functools
 import operator
+from functools import partial
 from itertools import product
+from multiprocessing import get_context
+from multiprocessing.pool import ThreadPool
 from typing import Literal
 
 import dask.array as da
@@ -368,6 +371,133 @@ def construct_dataframe(labeled_skeleton_image: da.Array) -> dd.DataFrame:
     graph_edges_ddf = graph_edges_ddf.drop_duplicates()
 
     return graph_edges_ddf
+
+
+def _extract_edges_chunk(
+    chunk_slices: tuple[slice, ...],
+    input_path: str,
+    spacing: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Worker: load one overlapping chunk from zarr and extract pixel-graph edges.
+
+    Returns (row, col, data) numpy arrays. Empty arrays are returned for
+    chunks that contain no skeleton voxels.
+    """
+    labeled_zarr = zarr.open(input_path, mode="r")
+    chunk_data = labeled_zarr[chunk_slices]
+
+    ndim = chunk_data.ndim
+    spacing_arr = np.ones(ndim, dtype=float) * spacing
+    num_edges = _num_edges(chunk_data.astype(bool))
+
+    if num_edges == 0:
+        empty_int = np.empty(0, dtype=np.int64)
+        return empty_int, empty_int, np.empty(0, dtype=np.float64)
+
+    padded = np.pad(chunk_data, 1)
+    steps, distances = raveled_steps_to_neighbors(
+        padded.shape, ndim, spacing=spacing_arr
+    )
+
+    row = np.empty(num_edges, dtype=int)
+    col = np.empty(num_edges, dtype=int)
+    data = np.empty(num_edges, dtype=float)
+    _write_pixel_graph(padded, steps, distances, row, col, data)
+
+    return row, col, data
+
+
+def construct_dataframe_parallel(
+    labeled_skeleton_path: str,
+    n_processes: int = 4,
+    pool_type: Literal["spawn", "fork", "forkserver", "thread"] = "fork",
+    spacing: float = 1.0,
+) -> pd.DataFrame:
+    """
+    Build the pixel-graph edge DataFrame from a labeled skeleton zarr in parallel.
+
+    Drop-in replacement for :func:`construct_dataframe` + ``.compute()``.
+    Chunk boundaries are read from the zarr metadata so the overlap slices
+    match exactly where the per-chunk labeling split the image.
+
+    Parameters
+    ----------
+    labeled_skeleton_path : str
+        Path to the labeled skeleton zarr produced by
+        :func:`skeleplex.skeleton._chunked_label.assign_unique_ids_parallel`.
+    n_processes : int, default=4
+        Number of worker processes/threads.
+    pool_type : {'spawn', 'fork', 'forkserver', 'thread'}, default='fork'
+        Multiprocessing context. 'fork' is fastest on Linux/macOS.
+    spacing : float, default=1.0
+        Voxel spacing passed to the edge-distance calculation.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with columns 'row', 'col', 'data' (already deduplicated).
+    """
+    labeled_zarr = zarr.open(labeled_skeleton_path, mode="r")
+    array_shape = labeled_zarr.shape
+    zarr_chunk_shape = labeled_zarr.chunks
+
+    # Convert zarr chunk shape to dask-style chunks ((dim0_c0, dim0_c1, ...), ...)
+    dask_chunks = tuple(
+        tuple(
+            cs if start + cs <= size else size - start
+            for start in range(0, size, cs)
+        )
+        for size, cs in zip(array_shape, zarr_chunk_shape, strict=False)
+    )
+
+    overlap_slices = slices_from_chunks_overlap(dask_chunks, array_shape, depth=1)
+
+    if pool_type == "thread":
+        pool = ThreadPool(n_processes)
+    else:
+        ctx = get_context(pool_type)
+        pool = ctx.Pool(n_processes)
+
+    process_func = partial(
+        _extract_edges_chunk,
+        input_path=labeled_skeleton_path,
+        spacing=spacing,
+    )
+
+    try:
+        results = pool.map(process_func, overlap_slices)
+    finally:
+        pool.close()
+        pool.join()
+
+    non_empty = [(r, c, d) for r, c, d in results if len(r) > 0]
+
+    if not non_empty:
+        return pd.DataFrame(
+            {"row": np.array([], dtype=np.int64),
+             "col": np.array([], dtype=np.int64),
+             "data": np.array([], dtype=np.float64)}
+        )
+
+    row_all = np.concatenate([r for r, _, _ in non_empty])
+    col_all = np.concatenate([c for _, c, _ in non_empty])
+    data_all = np.concatenate([d for _, _, d in non_empty])
+
+    # Remove duplicates from the depth-1 overlap regions.
+    # np.unique on stacked (row, col) pairs treats each pair as a unit,
+    # so (A, B) and (B, A) are kept as distinct directed edges.
+    _, unique_idx = np.unique(
+        np.column_stack([row_all, col_all]), axis=0, return_index=True
+    )
+
+    return pd.DataFrame(
+        {
+            "row": row_all[unique_idx],
+            "col": col_all[unique_idx],
+            "data": data_all[unique_idx],
+        }
+    )
 
 
 def build_pixel_indices(skeleton_image: da.Array) -> np.ndarray:
