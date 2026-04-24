@@ -743,6 +743,7 @@ class RenderReachableEdgesWidget:
     _INPUT_COLOR = np.array([1.0, 0.0, 0.0, 1.0], dtype=np.float32)
     _REACHABLE_COLOR = np.array([0.0, 1.0, 0.0, 1.0], dtype=np.float32)
     _OTHER_COLOR = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    _DEFAULT_BLUE = np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
 
     def __init__(self, viewer) -> None:
         self.viewer = viewer
@@ -757,54 +758,72 @@ class RenderReachableEdgesWidget:
         reset_button = QPushButton("Reset colors")
         reset_button.clicked.connect(self._on_reset_clicked)
 
+        self._status_label = QLabel("")
+        self._status_label.setWordWrap(True)
+
         self.container = QWidget()
         layout = QVBoxLayout()
         layout.addWidget(label)
         layout.addWidget(self._edge_input)
         layout.addWidget(run_button)
         layout.addWidget(reset_button)
+        layout.addWidget(self._status_label)
         self.container.setLayout(layout)
 
         viewer.add_auxiliary_widget(self.container, name="Render Reachable Edges")
 
+    def _set_status(self, msg: str) -> None:
+        self._status_label.setText(msg)
+
     def _on_run_clicked(self) -> None:
         """Parse the input edge, find reachable edges, and update edge colors."""
+        self._set_status("")
         try:
             edges = edge_string_to_key(self._edge_input.text())
-        except ValueError:
+        except ValueError as e:
+            self._set_status(f"Parse error: {e}")
             return
         if not edges:
+            self._set_status("No edges parsed.")
             return
 
-        edge = next(iter(edges))
-        graph = self.viewer.data.skeleton_graph.graph
-        reachable = get_reachable_edges(graph, edge)
-        input_key = (edge[0], edge[1])
+        try:
+            edge = next(iter(edges))
+            graph = self.viewer.data.skeleton_graph.graph
+            reachable = get_reachable_edges(graph, edge)
+            input_key = (edge[0], edge[1])
 
-        color_dict: dict[tuple[int, int], np.ndarray] = {}
-        for graph_edge in graph.edges():
-            key = (graph_edge[0], graph_edge[1])
-            if key == input_key:
-                color_dict[key] = self._INPUT_COLOR.copy()
-            elif key in reachable:
-                color_dict[key] = self._REACHABLE_COLOR.copy()
-            else:
-                color_dict[key] = self._OTHER_COLOR.copy()
+            color_dict: dict[tuple[int, int], np.ndarray] = {}
+            for graph_edge in graph.edges():
+                key = (graph_edge[0], graph_edge[1])
+                if key == input_key:
+                    color_dict[key] = self._INPUT_COLOR.copy()
+                elif key in reachable:
+                    color_dict[key] = self._REACHABLE_COLOR.copy()
+                else:
+                    color_dict[key] = self._OTHER_COLOR.copy()
 
-        self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
-            colormap=color_dict,
-            default_color=self._OTHER_COLOR,
-        )
+            self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
+                colormap=color_dict,
+                default_color=self._OTHER_COLOR,
+            )
+            self._set_status(
+                f"Highlighted {len(reachable)} reachable edges "
+                f"(input: {input_key})."
+            )
+        except Exception as e:
+            self._set_status(f"Error: {e}")
 
     def _on_reset_clicked(self) -> None:
         """Restore the default uniform blue colormap."""
-        self.viewer.data.edge_colormap = EdgeColormap(
-            colormap={},
-            default_color=EdgeColormap.from_arrays(
+        try:
+            self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
                 colormap={},
-                default_color=np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32),
-            ).default_color,
-        )
+                default_color=self._DEFAULT_BLUE,
+            )
+            self._set_status("")
+        except Exception as e:
+            self._set_status(f"Reset error: {e}")
 
 
 def change_color_attr(
