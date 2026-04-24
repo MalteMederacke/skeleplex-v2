@@ -44,6 +44,7 @@ SCALED_IMAGE_ZARR = f"{_OUTPUT_ZARR}/_image_scaled"
 DISTANCE_FIELD_ZARR = f"{_OUTPUT_ZARR}/_distance_field_on_scales"
 SKELETON_PREDICTIONS_ZARR = f"{_OUTPUT_ZARR}/_skeleton_predictions_on_scales"
 SKELETONIZED_ON_SCALES_ZARR = f"{_OUTPUT_ZARR}/_skeletonized_on_scales"
+SKELETONIZED_REPAIRED_ON_SCALES_ZARR = f"{_OUTPUT_ZARR}/_skeletonized_repaired_on_scales"
 SKELETONIZED_RESCALED_ZARR = f"{_OUTPUT_ZARR}/_skeletonized_rescaled"
 
 # --- Part 3 outputs ---

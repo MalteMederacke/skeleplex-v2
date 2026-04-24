@@ -11,7 +11,7 @@ from skeleplex.skeleton import upscale_skeleton_parallel
 sys.path.insert(0, str(Path(__file__).parent))
 from _constants import (
     SCALE_RANGES_MANUAL,
-    SKELETONIZED_ON_SCALES_ZARR,
+    SKELETONIZED_REPAIRED_ON_SCALES_ZARR,
     SKELETONIZED_RESCALED_ZARR,
 )
 
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     print(f"Scale number: {scale_number}  (target: {target_scale})")
     print(f"Re-scale factor: {re_scale_factor}")
 
-    input_path = f"{SKELETONIZED_ON_SCALES_ZARR}/scale{scale_number}"
+    input_path = f"{SKELETONIZED_REPAIRED_ON_SCALES_ZARR}/scale{scale_number}"
     output_path = f"{SKELETONIZED_RESCALED_ZARR}/origin_scale{scale_number}"
 
     if re_scale_factor == 1:
