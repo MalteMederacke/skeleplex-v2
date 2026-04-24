@@ -4,6 +4,7 @@
 
 IMAGE_PREFIX = "LADAF-2021-17-left-v9_processed"  # ADAPT HERE
 DATA_DIR = "/data"  # ADAPT HERE — root directory for all data
+TMP_DIR = f"{DATA_DIR}/tmp"  # ADAPT HERE — scratch space for intermediate files
 
 # Input image: path to the segmentation array inside the input zarr
 # ADAPT HERE
@@ -44,6 +45,7 @@ SCALED_IMAGE_ZARR = f"{_OUTPUT_ZARR}/_image_scaled"
 DISTANCE_FIELD_ZARR = f"{_OUTPUT_ZARR}/_distance_field_on_scales"
 SKELETON_PREDICTIONS_ZARR = f"{_OUTPUT_ZARR}/_skeleton_predictions_on_scales"
 SKELETONIZED_ON_SCALES_ZARR = f"{_OUTPUT_ZARR}/_skeletonized_on_scales"
+SKELETONIZED_LABELS_ON_SCALES_ZARR = f"{_OUTPUT_ZARR}/_skeletonized_labels_on_scales"
 SKELETONIZED_REPAIRED_ON_SCALES_ZARR = f"{_OUTPUT_ZARR}/_skeletonized_repaired_on_scales"
 SKELETONIZED_RESCALED_ZARR = f"{_OUTPUT_ZARR}/_skeletonized_rescaled"
 
