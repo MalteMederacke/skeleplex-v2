@@ -138,9 +138,7 @@ class MainCanvasController:
             self._skeleton.edges_store.coordinates = edge_coordinates.astype(
                 np.float32
             )[:, [2, 1, 0]]
-            self._skeleton.edges_store.colors = edge_colors.astype(np.float32)[
-                :, [2, 1, 0]
-            ]
+            self._skeleton.edges_store.colors = edge_colors.astype(np.float32)
 
         if self._skeleton.edges_visual is None:
             # if the lines visual is not populated, create it
