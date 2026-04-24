@@ -11,7 +11,7 @@ import numpy as np
 from magicgui import magicgui
 from qtpy.QtCore import QByteArray
 from qtpy.QtGui import QPixmap
-from qtpy.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+from qtpy.QtWidgets import QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 from skeleplex.graph.constants import (
     EDGE_SPLINE_KEY,
@@ -681,6 +681,128 @@ class ChangeBranchColorWidget:
         pixmap = QPixmap()
         pixmap.loadFromData(QByteArray(buf.getvalue()))
         self.colorbar_label.setPixmap(pixmap)
+
+
+def get_reachable_edges(
+    graph: nx.Graph, edge: tuple[int, ...]
+) -> set[tuple[int, int]]:
+    """Return all edges reachable from the given edge.
+
+    For directed graphs (DiGraph, MultiDiGraph), returns all edges reachable
+    downstream by following outgoing edges from the edge's target node.
+
+    For undirected graphs (Graph, MultiGraph), returns all edges in the
+    connected component containing the edge.
+
+    Parameters
+    ----------
+    graph : nx.Graph
+        The networkx graph to search.
+    edge : tuple[int, ...]
+        The reference edge as a (u, v) or (u, v, key) tuple.
+
+    Returns
+    -------
+    set[tuple[int, int]]
+        Set of (u, v) edge keys for all reachable edges, including the input edge.
+    """
+    u, v = edge[0], edge[1]
+
+    if isinstance(graph, nx.DiGraph):
+        # Downstream: BFS from v along outgoing edges
+        reachable: set[tuple[int, int]] = {(u, v)}
+        for a, b in nx.dfs_edges(graph, v):
+            reachable.add((a, b))
+    else:
+        # Undirected: entire connected component containing u/v
+        component = nx.node_connected_component(graph, u)
+        subgraph = graph.subgraph(component)
+        reachable = {(a, b) for a, b in subgraph.edges()}
+
+    return reachable
+
+
+class RenderReachableEdgesWidget:
+    """Widget that highlights edges reachable from a given input edge.
+
+    For directed graphs, highlights all downstream edges following outgoing
+    directions from the edge's target node. For undirected graphs, highlights
+    all edges in the same connected component.
+
+    The input edge is shown in red, reachable edges in green, and all
+    other edges are made transparent.
+
+    Parameters
+    ----------
+    viewer : SkelePlexApp
+        The SkelePlex application instance.
+    """
+
+    _INPUT_COLOR = np.array([1.0, 0.0, 0.0, 1.0], dtype=np.float32)
+    _REACHABLE_COLOR = np.array([0.0, 1.0, 0.0, 1.0], dtype=np.float32)
+    _OTHER_COLOR = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+
+    def __init__(self, viewer) -> None:
+        self.viewer = viewer
+
+        label = QLabel("Edge key:")
+        self._edge_input = QLineEdit()
+        self._edge_input.setPlaceholderText("e.g. {(1, 2)}")
+
+        run_button = QPushButton("Render reachable edges")
+        run_button.clicked.connect(self._on_run_clicked)
+
+        reset_button = QPushButton("Reset colors")
+        reset_button.clicked.connect(self._on_reset_clicked)
+
+        self.container = QWidget()
+        layout = QVBoxLayout()
+        layout.addWidget(label)
+        layout.addWidget(self._edge_input)
+        layout.addWidget(run_button)
+        layout.addWidget(reset_button)
+        self.container.setLayout(layout)
+
+        viewer.add_auxiliary_widget(self.container, name="Render Reachable Edges")
+
+    def _on_run_clicked(self) -> None:
+        """Parse the input edge, find reachable edges, and update edge colors."""
+        try:
+            edges = edge_string_to_key(self._edge_input.text())
+        except ValueError:
+            return
+        if not edges:
+            return
+
+        edge = next(iter(edges))
+        graph = self.viewer.data.skeleton_graph.graph
+        reachable = get_reachable_edges(graph, edge)
+        input_key = (edge[0], edge[1])
+
+        color_dict: dict[tuple[int, int], np.ndarray] = {}
+        for graph_edge in graph.edges():
+            key = (graph_edge[0], graph_edge[1])
+            if key == input_key:
+                color_dict[key] = self._INPUT_COLOR.copy()
+            elif key in reachable:
+                color_dict[key] = self._REACHABLE_COLOR.copy()
+            else:
+                color_dict[key] = self._OTHER_COLOR.copy()
+
+        self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
+            colormap=color_dict,
+            default_color=self._OTHER_COLOR,
+        )
+
+    def _on_reset_clicked(self) -> None:
+        """Restore the default uniform blue colormap."""
+        self.viewer.data.edge_colormap = EdgeColormap(
+            colormap={},
+            default_color=EdgeColormap.from_arrays(
+                colormap={},
+                default_color=np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32),
+            ).default_color,
+        )
 
 
 def change_color_attr(
