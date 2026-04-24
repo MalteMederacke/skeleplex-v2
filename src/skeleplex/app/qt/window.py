@@ -53,11 +53,12 @@ class MainWindow(QModelMainWindow):
         # create the status bar at the bottom of the window
         self._create_status_bar()
 
-    def add_auxiliary_widget(self, widget: QWidget, name: str = ""):
+    def add_auxiliary_widget(self, widget: QWidget, name: str = "", area: str = "right"):
         """Add a widget to the auxiliary views dock."""
         dock_widget = QDockWidget(name)
         dock_widget.setWidget(widget)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock_widget)
+        dock_area = Qt.DockWidgetArea.LeftDockWidgetArea if area == "left" else Qt.DockWidgetArea.RightDockWidgetArea
+        self.addDockWidget(dock_area, dock_widget)
 
     def _create_app_controls(self):
         self.app_controls = AppControlsDock(parent=self)
