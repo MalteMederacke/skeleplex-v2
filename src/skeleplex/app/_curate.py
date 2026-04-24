@@ -390,6 +390,7 @@ class CurationManager:
         self,
         node_id=int,
         bounding_box_width: int = 100,
+        render_segmentation: bool = False,
     ):
         """Render a bounding box around the specified node.
 
@@ -400,6 +401,9 @@ class CurationManager:
         bounding_box_width : int
             The width of the bounding box to render around the node.
             Default is 100.
+        render_segmentation : bool
+            Whether to also render the segmentation in the same bounding box.
+            Default is False.
         """
         # get the coordinate of the node
         node_id = node_string_to_node_keys(node_id)
@@ -418,6 +422,11 @@ class CurationManager:
 
         # set the render mode to bounding box
         self._data.skeleton_view.mode = "bounding_box"
+
+        if render_segmentation and self._data._segmentation is not None:
+            self._data.segmentation_view.bounding_box._min_coordinate = min_coordinate
+            self._data.segmentation_view.bounding_box._max_coordinate = max_coordinate
+            self._data.segmentation_view.mode = "bounding_box"
 
     def _update_and_request_redraw(
         self, clear_edge_selection: bool = True, clear_node_selection: bool = True
