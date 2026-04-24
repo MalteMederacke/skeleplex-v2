@@ -57,24 +57,26 @@ def image_to_graph_skan(
         spline_path = skeleton.path_coordinates(index)
         spline_path = spline_path * image_voxel_size_um  # scale to um
         n_points = len(spline_path)
-        if n_points <= max_spline_knots:
-            n_spline_knots = n_points - 1
-            if n_spline_knots <= 3:  # min for b3 spline
-                # resample along the actual path so curved short branches
-                # are not flattened to a straight line
-                deltas = np.diff(spline_path, axis=0)
-                seg_lengths = np.linalg.norm(deltas, axis=1)
-                if seg_lengths.sum() == 0:
-                    seg_lengths = np.ones(len(seg_lengths))
-                cumlen = np.concatenate(([0], np.cumsum(seg_lengths)))
-                cumlen /= cumlen[-1]
-                t_out = np.linspace(0, 1, max_spline_knots)
-                spline_path = np.column_stack(
-                    [np.interp(t_out, cumlen, spline_path[:, d]) for d in range(3)]
-                )
-                n_spline_knots = max_spline_knots - 1
-        else:
+        if n_points > max_spline_knots:
             n_spline_knots = max_spline_knots
+        else:
+            n_spline_knots = max(4, n_points - 1)
+
+        # B3 spline fitting is unstable when data points are too sparse relative
+        # to the number of knots (Runge-like oscillation). Require at least 3x
+        # oversampling along the arc-length parameterisation before fitting.
+        min_n_fit_points = 3 * n_spline_knots
+        if n_points < min_n_fit_points:
+            deltas = np.diff(spline_path, axis=0)
+            seg_lengths = np.linalg.norm(deltas, axis=1)
+            if seg_lengths.sum() == 0:
+                seg_lengths = np.ones(len(seg_lengths))
+            cumlen = np.concatenate(([0], np.cumsum(seg_lengths)))
+            cumlen /= cumlen[-1]
+            t_out = np.linspace(0, 1, min_n_fit_points)
+            spline_path = np.column_stack(
+                [np.interp(t_out, cumlen, spline_path[:, d]) for d in range(3)]
+            )
         spline = B3Spline.from_points(
             points=spline_path,
             n_knots=n_spline_knots,
