@@ -13,7 +13,10 @@ from skeleplex.app import (
     SkeletonDataPaths,
     SkeletonGraphFile,
 )
-from skeleplex.app._curate import ChangeBranchColorWidget, make_split_edge_widget
+from skeleplex.app._curate import (ChangeBranchColorWidget,
+                                   make_split_edge_widget,
+                                   RenderReachableEdgesWidget
+)
 
 # store reference to QApplication to prevent garbage collection
 _app_ref: QApplication | None = None
@@ -119,6 +122,8 @@ def view_skeleton(
                 connect_with_merging_widget.native, name="Connect with merging"
             )
             viewer.add_auxiliary_widget(split_edge_widget.native, name="Split edge")
+            RenderReachableEdgesWidget(viewer)
+            
         except Exception as e:
             print(f"Error launching widgets: {e}")
         return viewer

@@ -562,7 +562,9 @@ class ChangeBranchColorWidget:
         self.widget.vmax.changed.connect(self._on_slider_value_change)
 
         # Add the full container widget to the viewer
-        self.viewer.add_auxiliary_widget(self.container, name="Change Branch Color")
+        self.viewer.add_auxiliary_widget(self.container,
+                                         name="Change Branch Color",
+                                         area="left")
 
     def change_branch_color(
         self, edge_attribute: str, cmap: str, vmin: float, vmax: float
