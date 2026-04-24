@@ -619,13 +619,23 @@ def skeleton_image_to_graph(
         edge_coords = skel_obj.path_coordinates(index)
         edge_coords = edge_coords * image_voxel_size_um  # scale to um
 
-        if len(edge_coords) <= 3:
-            edge_coords = np.insert(edge_coords, -1, edge_coords[-1] - 0.1, axis=0)
-            if len(edge_coords) <= 3:
-                edge_coords = np.insert(edge_coords, -1, edge_coords[-1] - 0.01, axis=0)
-
-        if len(edge_coords) < 15:
-            edge_coords = np.linspace(edge_coords[0], edge_coords[-1], 20)
+        # Ensure enough points for a well-conditioned B3 spline fit.
+        # Resample along the actual path rather than only using endpoints,
+        # so curved short branches are not flattened into a straight line.
+        min_points = 20
+        if len(edge_coords) < min_points:
+            # build a cumulative arc-length parameterisation of the raw path
+            deltas = np.diff(edge_coords, axis=0)
+            seg_lengths = np.linalg.norm(deltas, axis=1)
+            # guard against degenerate zero-length edges
+            if seg_lengths.sum() == 0:
+                seg_lengths = np.ones(len(seg_lengths))
+            cumlen = np.concatenate(([0], np.cumsum(seg_lengths)))
+            cumlen /= cumlen[-1]
+            t_out = np.linspace(0, 1, min_points)
+            edge_coords = np.column_stack(
+                [np.interp(t_out, cumlen, edge_coords[:, d]) for d in range(3)]
+            )
 
         nx_graph.add_edge(
             node_src,
