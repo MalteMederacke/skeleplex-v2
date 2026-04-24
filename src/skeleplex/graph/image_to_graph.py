@@ -60,9 +60,17 @@ def image_to_graph_skan(
         if n_points <= max_spline_knots:
             n_spline_knots = n_points - 1
             if n_spline_knots <= 3:  # min for b3 spline
-                # interpolate with a line to get more knots
-                spline_path = np.linspace(
-                    spline_path[0], spline_path[-1], max_spline_knots
+                # resample along the actual path so curved short branches
+                # are not flattened to a straight line
+                deltas = np.diff(spline_path, axis=0)
+                seg_lengths = np.linalg.norm(deltas, axis=1)
+                if seg_lengths.sum() == 0:
+                    seg_lengths = np.ones(len(seg_lengths))
+                cumlen = np.concatenate(([0], np.cumsum(seg_lengths)))
+                cumlen /= cumlen[-1]
+                t_out = np.linspace(0, 1, max_spline_knots)
+                spline_path = np.column_stack(
+                    [np.interp(t_out, cumlen, spline_path[:, d]) for d in range(3)]
                 )
                 n_spline_knots = max_spline_knots - 1
         else:

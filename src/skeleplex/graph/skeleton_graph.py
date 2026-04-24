@@ -531,7 +531,8 @@ class SkeletonGraph:
             if scale_to_um and voxel_size_um is not None:
                 edge_coords = edge_coords * voxel_size_um
             attr[EDGE_COORDINATES_KEY] = edge_coords
-            spline = B3Spline.from_points(attr[EDGE_COORDINATES_KEY])
+            n_knots = max(4, len(edge_coords) // 5)
+            spline = B3Spline.from_points(attr[EDGE_COORDINATES_KEY], n_knots=n_knots)
             attr[EDGE_SPLINE_KEY] = spline
         for _, node_data in graph_mod.nodes(data=True):
             node_coords = node_data.pop(node_coordinate_key)
