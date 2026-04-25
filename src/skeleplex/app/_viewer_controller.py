@@ -86,7 +86,7 @@ class MainCanvasController:
             span = float(np.ptp(node_coordinates, axis=0).max())
         else:
             span = 100.0
-        node_size = max(8.0, span * 0.01)
+        node_size = max(8.0, span * 0.003)
         return {
             "node": node_size,
             "node_highlight": node_size * 2.5,
@@ -217,7 +217,7 @@ class MainCanvasController:
         if self._skeleton.node_visual is None:
             # make the points material
             points_material_3d = PointsUniformAppearance(
-                size=sizes["node"], color=(0, 0, 0, 1), size_coordinate_space="data"
+                size=sizes["node"], color=(0, 0, 0, 0.8), size_coordinate_space="data"
             )
 
             # make the points model
