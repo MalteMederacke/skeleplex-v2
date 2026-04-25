@@ -20,6 +20,16 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
+def _get_edge_data(graph, u, v):
+    """Get edge attribute dict, handling multigraphs by returning first edge's data."""
+    data = graph.get_edge_data(u, v)
+    if data is None:
+        return None
+    if graph.is_multigraph():
+        return data[min(data.keys())]
+    return data
+
+
 def merge_edge(skeleton_graph: SkeletonGraph, n1: int, v1: int, n2: int):
     """Merge edges in graph and add edge attributes.
 
@@ -89,8 +99,8 @@ def merge_edge(skeleton_graph: SkeletonGraph, n1: int, v1: int, n2: int):
     # edge1 = (start_node, middle_node)
     # edge2 = (middle_node, end_node)
 
-    edge_attributes1 = graph.get_edge_data(edge1[0], edge1[1])
-    edge_attributes2 = graph.get_edge_data(edge2[0], edge2[1])
+    edge_attributes1 = _get_edge_data(graph, edge1[0], edge1[1])
+    edge_attributes2 = _get_edge_data(graph, edge2[0], edge2[1])
     graph.remove_edge(edge1[0], edge1[1])
     graph.remove_edge(edge2[0], edge2[1])
     graph.remove_node(edge1[1])
@@ -194,9 +204,6 @@ def delete_edge(skeleton_graph: SkeletonGraph, edge: tuple[int, int]):
     edge : Tuple[int, int]
         The edge to delete.
     """
-    # check if directed
-    if not skeleton_graph.graph.is_directed():
-        ValueError("Graph is not directed. Convert to directed graph.")
     # copy graph
     graph = skeleton_graph.graph.copy()
     graph.remove_edge(*edge)
@@ -210,16 +217,19 @@ def delete_edge(skeleton_graph: SkeletonGraph, edge: tuple[int, int]):
                 skeleton_graph.graph.remove_node(node)
             # merge edges if node has degree 2
             elif skeleton_graph.graph.degree(node) == 2:
-                # merge
-                in_edge = list(skeleton_graph.graph.in_edges(node))
-                out_edge = list(skeleton_graph.graph.out_edges(node))
-                if len(in_edge) == 0:
-                    raise ValueError(
-                        ("Deleting the edge would break the graph"),
-                        "Are you trying to delete the origin?",
-                    )
-
-                merge_edge(skeleton_graph, in_edge[0][0], node, out_edge[0][1])
+                if skeleton_graph.graph.is_directed():
+                    in_edge = list(skeleton_graph.graph.in_edges(node))
+                    out_edge = list(skeleton_graph.graph.out_edges(node))
+                    if len(in_edge) == 0:
+                        raise ValueError(
+                            "Deleting the edge would break the graph. "
+                            "Are you trying to delete the origin?"
+                        )
+                    merge_edge(skeleton_graph, in_edge[0][0], node, out_edge[0][1])
+                else:
+                    neighbors = list(skeleton_graph.graph.neighbors(node))
+                    if len(neighbors) == 2:
+                        merge_edge(skeleton_graph, neighbors[0], node, neighbors[1])
                 logger.info("merge")
 
     # check if graph is still connected, if not remove orphaned nodes
@@ -239,10 +249,6 @@ def length_pruning(skeleton_graph: SkeletonGraph, length_threshold: int):
 
 
     """
-    # check if directed
-    if not skeleton_graph.graph.is_directed():
-        ValueError("Graph is not directed. Convert to directed graph.")
-
     graph = skeleton_graph.graph
     g_unmodified = graph.copy()
 
@@ -253,7 +259,10 @@ def length_pruning(skeleton_graph: SkeletonGraph, length_threshold: int):
 
     for node, degree in g_unmodified.degree():
         if (degree == 1) and (node != skeleton_graph.origin):
-            edge = next(iter(graph.in_edges(node)))
+            if graph.is_directed():
+                edge = next(iter(graph.in_edges(node)))
+            else:
+                edge = next(iter(graph.edges(node)))
             path_length = graph.edges[edge[0], edge[1]].get(LENGTH_KEY)
             # start_node = edge[0]
             if path_length < length_threshold:
@@ -286,12 +295,17 @@ def prune_degree_2_nodes(skeleton_graph: SkeletonGraph):
         if node == origin:
             continue
         if graph.degree(node) == 2:
-            in_edges = list(graph.in_edges(node))
-            out_edges = list(graph.out_edges(node))
-            if len(in_edges) == 1 and len(out_edges) == 1:
-                u = in_edges[0][0]
-                w = out_edges[0][1]
-                nodes_to_merge.append((u, node, w))
+            if graph.is_directed():
+                in_edges = list(graph.in_edges(node))
+                out_edges = list(graph.out_edges(node))
+                if len(in_edges) == 1 and len(out_edges) == 1:
+                    u = in_edges[0][0]
+                    w = out_edges[0][1]
+                    nodes_to_merge.append((u, node, w))
+            else:
+                neighbors = list(graph.neighbors(node))
+                if len(neighbors) == 2:
+                    nodes_to_merge.append((neighbors[0], node, neighbors[1]))
 
     logger.info(f"Found {len(nodes_to_merge)} degree-2 nodes to merge.")
 
@@ -505,14 +519,13 @@ def connect_without_merging(
     nx.DiGraph
         The modified skeleton graph with the new edge added.
     """
-    # check if directed
-    if not skeleton_graph.graph.is_directed():
-        ValueError("Graph is not directed. Convert to directed graph.")
     # copy graph
     graph = skeleton_graph.graph.copy()
     # check if nodes are already connected
     if graph.has_edge(node1, node2):
         logger.warning(f"Nodes {node1} and {node2} are already connected.")
+        return skeleton_graph.graph if return_graph else None
+
 
     u_coordinates = skeleton_graph.graph.nodes[node1][NODE_COORDINATE_KEY]
     v_coordinates = skeleton_graph.graph.nodes[node2][NODE_COORDINATE_KEY]
@@ -560,8 +573,11 @@ def merge_nodes(
             f"Node {node_to_merge} has degree {degree_of_merge}. "
             "Only nodes with degree 1 can be merged."
         )
-    edge_to_merge = skeleton_graph.graph.in_edges(node_to_merge)
-    second_node_to_keep = next(iter(edge_to_merge))[0]
+    if skeleton_graph.graph.is_directed():
+        edge_iter = skeleton_graph.graph.in_edges(node_to_merge)
+    else:
+        edge_iter = skeleton_graph.graph.edges(node_to_merge)
+    second_node_to_keep = next(iter(edge_iter))[0]
     skeleton_graph.graph = connect_without_merging(
         skeleton_graph=skeleton_graph,
         node1=node_to_keep,
