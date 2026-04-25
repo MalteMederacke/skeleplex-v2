@@ -3,6 +3,7 @@ from functools import partial
 from itertools import product
 from multiprocessing import Lock, Value, get_context
 from multiprocessing.pool import ThreadPool
+import shutil
 from typing import Literal
 
 import dask.array as da
@@ -929,22 +930,28 @@ def label_and_merge(
     os.makedirs(tmp_dir, exist_ok=True)
     labeled_tmp_path = os.path.join(tmp_dir, "labeled_unmerged.zarr")
 
-    max_label_value = label_chunks_parallel(
-        input_path=input_path,
-        output_path=labeled_tmp_path,
-        chunk_shape=chunk_shape,
-        n_processes=n_label_processes,
-        pool_type=pool_type,
-        backend=backend,
-        structure=structure,
-    )
+    try:
 
-    merge_touching_labels(
-        label_image_path=labeled_tmp_path,
-        output_image_path=output_path,
-        chunk_shape=chunk_shape,
-        max_label_value=max_label_value,
-        n_processes=n_merge_processes,
-        pool_type=pool_type,
-        backend=backend,
-    )
+        max_label_value = label_chunks_parallel(
+            input_path=input_path,
+            output_path=labeled_tmp_path,
+            chunk_shape=chunk_shape,
+            n_processes=n_label_processes,
+            pool_type=pool_type,
+            backend=backend,
+            structure=structure,
+        )
+
+        merge_touching_labels(
+            label_image_path=labeled_tmp_path,
+            output_image_path=output_path,
+            chunk_shape=chunk_shape,
+            max_label_value=max_label_value,
+            n_processes=n_merge_processes,
+            pool_type=pool_type,
+            backend=backend,
+        )
+    finally:
+        #remove tmp
+        shutil.rmtree(labeled_tmp_path)
+
