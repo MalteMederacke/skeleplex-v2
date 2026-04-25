@@ -564,7 +564,11 @@ def relabel_parallel(
 
     # Create the output zarr
     _ = zarr.create_array(
-        output_array_path, shape=array_shape, chunks=chunk_shape, dtype=dtype
+        output_array_path,
+        shape=array_shape,
+        chunks=chunk_shape,
+        dtype=dtype,
+        overwrite = True
     )
 
     # Create list of chunk slices
