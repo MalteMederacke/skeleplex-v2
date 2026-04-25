@@ -22,6 +22,7 @@ from _constants import (
     INPUT_IMAGE_PATH,
     SCALE_MAP_PROCESSED_PATH,
     SCALE_RANGES_MANUAL,
+    SKELETONIZED_LABELS_ON_SCALES_ZARR,
     SKELETONIZED_RESCALED_ZARR,
 )
 
@@ -67,8 +68,9 @@ repair_breaks_lazy(
     skeleton_path=FUSED_TREE_PATH,
     segmentation_path=INPUT_IMAGE_PATH,
     output_path=FINAL_SKELETON_PATH,
-    repair_radius=40,
-    chunk_shape=(256, 256, 256),
+    label_map_path = SKELETONIZED_LABELS_ON_SCALES_ZARR + "/scale-1", #OR WHATEVER THE FINEST SCALE NUMBER IS
+    repair_radius=50,
+    chunk_shape=(512, 512, 512),
     backend="cupy",
 )
 
