@@ -427,6 +427,8 @@ class CurationManager:
             self._data.segmentation_view.bounding_box._min_coordinate = min_coordinate
             self._data.segmentation_view.bounding_box._max_coordinate = max_coordinate
             self._data.segmentation_view.mode = "bounding_box"
+        else:
+            self._data.segmentation_view.mode = "none"
 
     def _update_and_request_redraw(
         self, clear_edge_selection: bool = True, clear_node_selection: bool = True
