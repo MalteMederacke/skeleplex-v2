@@ -503,7 +503,7 @@ def make_split_edge_widget(viewer):
         viewer._viewer._backend.reslice_all()
 
     split_edge_widget.split_pos.changed.connect(preview_split)
-    point_size = np.max(np.max(viewer.data.node_coordinates) * 0.01, 50)
+    point_size = np.max((np.max(viewer.data.node_coordinates) * 0.01, 50))
     split_edge_widget.point_visual, split_edge_widget.point_store = viewer.add_points(
         point_size=point_size
         )
