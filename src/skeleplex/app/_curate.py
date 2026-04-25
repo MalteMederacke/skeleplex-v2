@@ -507,8 +507,9 @@ def make_split_edge_widget(viewer):
     return split_edge_widget
 
 
-class ChangeBranchColorWidget:
+class ChangeBranchColorWidget(QWidget):
     def __init__(self, viewer):
+        super().__init__()
         self.viewer = viewer
 
         # Create magicgui widget
@@ -546,14 +547,12 @@ class ChangeBranchColorWidget:
         # QLabel for colorbar
         self.colorbar_label = QLabel()
 
-        # Layout to contain both magicgui and colorbar
-        self.container = QWidget()
         layout = QVBoxLayout()
         layout.addWidget(self.widget.native)
         layout.addWidget(self.run_button)
         layout.addWidget(self.filter_button)
         layout.addWidget(self.colorbar_label)
-        self.container.setLayout(layout)
+        self.setLayout(layout)
 
         self.widget.edge_attribute.changed.connect(self._on_attribute_change)
         self._on_attribute_change(self.widget.edge_attribute.value)
@@ -561,10 +560,7 @@ class ChangeBranchColorWidget:
         self.widget.vmin.changed.connect(self._on_slider_value_change)
         self.widget.vmax.changed.connect(self._on_slider_value_change)
 
-        # Add the full container widget to the viewer
-        self.viewer.add_auxiliary_widget(self.container,
-                                         name="Change Branch Color",
-                                         area="left")
+        self.viewer.add_auxiliary_widget(self, name="Change Branch Color", area="left")
 
     def change_branch_color(
         self, edge_attribute: str, cmap: str, vmin: float, vmax: float
@@ -724,7 +720,7 @@ def get_reachable_edges(
     return reachable
 
 
-class RenderReachableEdgesWidget:
+class RenderReachableEdgesWidget(QWidget):
     """Widget that highlights edges reachable from a given input edge.
 
     For directed graphs, highlights all downstream edges following outgoing
@@ -746,6 +742,7 @@ class RenderReachableEdgesWidget:
     _DEFAULT_BLUE = np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
 
     def __init__(self, viewer) -> None:
+        super().__init__()
         self.viewer = viewer
 
         label = QLabel("Edge key:")
@@ -761,16 +758,15 @@ class RenderReachableEdgesWidget:
         self._status_label = QLabel("")
         self._status_label.setWordWrap(True)
 
-        self.container = QWidget()
         layout = QVBoxLayout()
         layout.addWidget(label)
         layout.addWidget(self._edge_input)
         layout.addWidget(run_button)
         layout.addWidget(reset_button)
         layout.addWidget(self._status_label)
-        self.container.setLayout(layout)
+        self.setLayout(layout)
 
-        viewer.add_auxiliary_widget(self.container, name="Render Reachable Edges")
+        viewer.add_auxiliary_widget(self, name="Render Reachable Edges")
 
     def _set_status(self, msg: str) -> None:
         self._status_label.setText(msg)

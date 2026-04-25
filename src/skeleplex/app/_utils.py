@@ -123,7 +123,7 @@ def view_skeleton(
             )
             viewer.add_auxiliary_widget(split_edge_widget.native, name="Split edge")
             RenderReachableEdgesWidget(viewer)
-            
+
         except Exception as e:
             print(f"Error launching widgets: {e}")
         return viewer
