@@ -393,7 +393,7 @@ class SkelePlexApp(Application):
             )
 
     def add_points(
-        self, point_coordinates: np.ndarray | None = None
+        self, point_coordinates: np.ndarray | None = None, point_size = 50
     ) -> tuple[PointsVisual, PointsMemoryStore]:
         """Add points to the viewer.
 
@@ -402,6 +402,8 @@ class SkelePlexApp(Application):
         point_coordinates : np.ndarray, optional
             The coordinates of the points to add, by default np.array([0,0,0],
                                                                 dtype=np.float32)
+        point_size : int, optional
+            The size of the points to add, by default 50
 
         Returns
         -------
@@ -422,7 +424,7 @@ class SkelePlexApp(Application):
 
         # set up the points appearance
         points_appearance = PointsUniformAppearance(
-            size=50, color=(0, 1, 0, 1), size_coordinate_space="data"
+            size=point_size, color=(0, 1, 0, 1), size_coordinate_space="data"
         )
 
         # make the highlight points model
