@@ -80,6 +80,20 @@ class MainCanvasController:
         """Get the scene ID of the main canvas."""
         return self._scene_id
 
+    def _compute_sizes(self, node_coordinates: np.ndarray) -> dict:
+        """Compute display sizes scaled to the node coordinate span."""
+        if len(node_coordinates) > 1:
+            span = float(np.ptp(node_coordinates, axis=0).max())
+        else:
+            span = 100.0
+        node_size = max(8.0, span * 0.01)
+        return {
+            "node": node_size,
+            "node_highlight": node_size * 2.5,
+            "edge": max(2.0, span * 0.002),
+            "edge_highlight": max(6.0, span * 0.006),
+        }
+
     def update_skeleton_geometry(
         self,
         edge_coordinates: np.ndarray,
@@ -100,6 +114,8 @@ class MainCanvasController:
             (n_nodes, 3) array of coordinates of the nodes of the skeleton
             to be rendered.
         """
+        sizes = self._compute_sizes(node_coordinates)
+
         # make the highlight lines store
         if self._skeleton.edge_highlight_store is None:
             # if the highlight store is not populated, create it
@@ -111,7 +127,10 @@ class MainCanvasController:
         if self._skeleton.edge_highlight_visual is None:
             # if the highlight visual is not populated, create it
             edge_highlight_material_3d = LinesUniformAppearance(
-                color=(1, 0, 1, 1), size=6, size_coordinate_space="data", opacity=1.0
+                color=(1, 0, 1, 1),
+                size=sizes["edge_highlight"],
+                size_coordinate_space="data",
+                opacity=1.0,
             )
 
             # make the highlight lines model
@@ -143,7 +162,7 @@ class MainCanvasController:
         if self._skeleton.edges_visual is None:
             # if the lines visual is not populated, create it
             edge_lines_material_3d = LinesVertexColorAppearance(
-                size=2, size_coordinate_space="data"
+                size=sizes["edge"], size_coordinate_space="data"
             )
 
             # make the lines model
@@ -167,7 +186,7 @@ class MainCanvasController:
         if self._skeleton.node_highlight_visual is None:
             # make the highlight points material
             highlight_points_material_3d = PointsUniformAppearance(
-                size=20, color=(0, 1, 0, 1), size_coordinate_space="data"
+                size=sizes["node_highlight"], color=(0, 1, 0, 1), size_coordinate_space="data"
             )
 
             # make the highlight points model
@@ -198,7 +217,7 @@ class MainCanvasController:
         if self._skeleton.node_visual is None:
             # make the points material
             points_material_3d = PointsUniformAppearance(
-                size=8, color=(0, 0, 0, 1), size_coordinate_space="data"
+                size=sizes["node"], color=(0, 0, 0, 1), size_coordinate_space="data"
             )
 
             # make the points model
@@ -211,6 +230,16 @@ class MainCanvasController:
             self._backend.add_visual(
                 visual_model=points_visual_3d, scene_id=self.scene_id
             )
+
+        # update appearance sizes in case dataset changed
+        else:
+            self._skeleton.node_visual.appearance.size = sizes["node"]
+        if self._skeleton.node_highlight_visual is not None:
+            self._skeleton.node_highlight_visual.appearance.size = sizes["node_highlight"]
+        if self._skeleton.edges_visual is not None:
+            self._skeleton.edges_visual.appearance.size = sizes["edge"]
+        if self._skeleton.edge_highlight_visual is not None:
+            self._skeleton.edge_highlight_visual.appearance.size = sizes["edge_highlight"]
 
         # reslice the scene
         self._backend.reslice_scene(scene_id=self.scene_id)

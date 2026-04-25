@@ -742,7 +742,7 @@ class RenderReachableEdgesWidget(QWidget):
     """
 
     _INPUT_COLOR = np.array([1.0, 0.0, 0.0, 1.0], dtype=np.float32)
-    _REACHABLE_COLOR = np.array([0.0, 1.0, 0.0, 1.0], dtype=np.float32)
+    _REACHABLE_COLOR = np.array([0.3, 0.3, 0.8, 1.0], dtype=np.float32)
     _OTHER_COLOR = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float32)
     _DEFAULT_BLUE = np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
 
