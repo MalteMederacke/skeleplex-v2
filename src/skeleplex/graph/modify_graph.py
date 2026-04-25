@@ -340,12 +340,20 @@ def split_edge(
     split_pos : float
         The position to split the edge at. Normalized between 0 and 1.
     """
-    # test if edge is in tree
-    if edge_to_split_ID not in skeleton_graph.graph.edges:
-        ValueError(f"Edge {edge_to_split_ID} not in graph.")
+    # For multigraphs, normalize a (u, v) edge ID to (u, v, key) using the first key
+    if skeleton_graph.graph.is_multigraph() and len(edge_to_split_ID) == 2:
+        u, v = edge_to_split_ID
+        keys = list(skeleton_graph.graph[u][v].keys())
+        if not keys:
+            raise ValueError(f"Edge {edge_to_split_ID} not in graph.")
+        edge_to_split_ID = (u, v, keys[0])
+
+    if not skeleton_graph.graph.has_edge(*edge_to_split_ID):
+        raise ValueError(f"Edge {edge_to_split_ID} not in graph.")
     graph = skeleton_graph.graph.copy()
-    spline = skeleton_graph.graph.edges[edge_to_split_ID][EDGE_SPLINE_KEY]
-    edge_coordinates = graph.edges[edge_to_split_ID][EDGE_COORDINATES_KEY]
+    edge_data = _get_edge_data(graph, edge_to_split_ID[0], edge_to_split_ID[1])
+    spline = edge_data[EDGE_SPLINE_KEY]
+    edge_coordinates = edge_data[EDGE_COORDINATES_KEY]
     coordinate_to_split = spline.eval(split_pos)
     split_index = np.argmin(
         np.linalg.norm(edge_coordinates - coordinate_to_split, axis=1)
