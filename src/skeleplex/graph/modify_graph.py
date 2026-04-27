@@ -182,11 +182,14 @@ def merge_edge(skeleton_graph: SkeletonGraph, n1: int, v1: int, n2: int):
     skeleton_graph.graph = graph
 
 
-def delete_edge(skeleton_graph: SkeletonGraph, edge: tuple[int, int]):
+def delete_edge(
+    skeleton_graph: SkeletonGraph, edge: tuple[int, int], force: bool = False
+):
     """Delete edge in skeleton graph.
 
     To maintain a dichotomous structure, the edge is deleted and the
     resulting degree 2 node is merged with its neighbors.
+    Set force=True to skip merging and remove the edge as-is.
 
             "Delete (2,4)"
     1               1
@@ -203,19 +206,25 @@ def delete_edge(skeleton_graph: SkeletonGraph, edge: tuple[int, int]):
         The graph to delete the edge from.
     edge : Tuple[int, int]
         The edge to delete.
+    force : bool
+        If True, remove the edge without any merging of degree-2 nodes.
+        Default is False.
     """
-    # copy graph
     graph = skeleton_graph.graph.copy()
     graph.remove_edge(*edge)
 
-    # detect all changes
+    if force:
+        skeleton_graph.graph = graph
+        skeleton_graph.graph.remove_nodes_from(list(nx.isolates(skeleton_graph.graph)))
+        return
+
+    # detect all changes and merge degree-2 nodes
     changed_edges = set(skeleton_graph.graph.edges) - set(graph.edges)
     skeleton_graph.graph = graph
     for edge in changed_edges:
         for node in edge:
             if skeleton_graph.graph.degree(node) == 0:
                 skeleton_graph.graph.remove_node(node)
-            # merge edges if node has degree 2
             elif skeleton_graph.graph.degree(node) == 2:
                 if skeleton_graph.graph.is_directed():
                     in_edge = list(skeleton_graph.graph.in_edges(node))
@@ -232,7 +241,6 @@ def delete_edge(skeleton_graph: SkeletonGraph, edge: tuple[int, int]):
                         merge_edge(skeleton_graph, neighbors[0], node, neighbors[1])
                 logger.info("merge")
 
-    # check if graph is still connected, if not remove orphaned nodes
     skeleton_graph.graph.remove_nodes_from(list(nx.isolates(skeleton_graph.graph)))
     # skeleton_graph.graph = graph
 

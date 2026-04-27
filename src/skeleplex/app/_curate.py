@@ -11,7 +11,14 @@ import numpy as np
 from magicgui import magicgui
 from qtpy.QtCore import QByteArray
 from qtpy.QtGui import QPixmap
-from qtpy.QtWidgets import QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
+from qtpy.QtWidgets import (
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from skeleplex.graph.constants import (
     EDGE_SPLINE_KEY,
@@ -210,6 +217,7 @@ class CurationManager:
     def delete_edge(
         self,
         edge: Annotated[set[tuple[int, int]] | str, {"widget_type": "LineEdit"}],
+        force: bool = False,
         redraw: bool = True,
     ) -> None:
         """Delete an edge from the skeleton graph.
@@ -219,6 +227,9 @@ class CurationManager:
         edge : tuple[int, int] | None
             The edge to delete, represented as a tuple of node IDs.
             If None, no action is taken.
+        force : bool
+            If True, remove the edge without merging degree-2 nodes.
+            Default is False.
         redraw : bool
             Flag set to True to redraw the graph after deletion.
             Defaults value is True.
@@ -235,7 +246,7 @@ class CurationManager:
 
         # delete the edge from the skeleton graph
         for edge in edges:
-            delete_edge(skeleton_graph=self._data.skeleton_graph, edge=edge)
+            delete_edge(skeleton_graph=self._data.skeleton_graph, edge=edge, force=force)
 
         if redraw:
             # redraw the graph
@@ -687,7 +698,7 @@ class ChangeBranchColorWidget(QWidget):
 
 
 def get_reachable_edges(
-    graph: nx.Graph, edge: tuple[int, ...]
+    graph: nx.Graph, edge: tuple[int, ...], n_steps: int | None = None
 ) -> set[tuple[int, int]]:
     """Return all edges reachable from the given edge.
 
@@ -703,6 +714,9 @@ def get_reachable_edges(
         The networkx graph to search.
     edge : tuple[int, ...]
         The reference edge as a (u, v) or (u, v, key) tuple.
+    n_steps : int | None
+        Maximum number of edge-hops from the input edge to include.
+        None means no limit (entire reachable subgraph).
 
     Returns
     -------
@@ -712,14 +726,21 @@ def get_reachable_edges(
     u, v = edge[0], edge[1]
 
     if isinstance(graph, nx.DiGraph):
-        # Downstream: BFS from v along outgoing edges
         reachable: set[tuple[int, int]] = {(u, v)}
-        for a, b in nx.dfs_edges(graph, v):
+        for a, b in nx.bfs_edges(graph, v, depth_limit=n_steps):
             reachable.add((a, b))
+            reachable.add((b, a))
     else:
-        # Undirected: entire connected component containing u/v
-        component = nx.node_connected_component(graph, u)
-        subgraph = graph.subgraph(component)
+        if n_steps is None:
+            component = nx.node_connected_component(graph, u)
+            nearby_nodes = component
+        else:
+            nodes_u = {n for n, _ in nx.bfs_edges(graph, u, depth_limit=n_steps)}
+            nodes_u.add(u)
+            nodes_v = {n for n, _ in nx.bfs_edges(graph, v, depth_limit=n_steps)}
+            nodes_v.add(v)
+            nearby_nodes = nodes_u | nodes_v
+        subgraph = graph.subgraph(nearby_nodes)
         reachable = {(a, b) for a, b in subgraph.edges()} | {
             (b, a) for a, b in subgraph.edges()
         }
@@ -756,6 +777,12 @@ class RenderReachableEdgesWidget(QWidget):
         self._edge_input = QLineEdit()
         self._edge_input.setPlaceholderText("e.g. {(1, 2)}")
 
+        steps_label = QLabel("Max steps (0 = all):")
+        self._steps_spinbox = QSpinBox()
+        self._steps_spinbox.setMinimum(0)
+        self._steps_spinbox.setMaximum(9999)
+        self._steps_spinbox.setValue(0)
+
         run_button = QPushButton("Render reachable edges")
         run_button.clicked.connect(self._on_run_clicked)
 
@@ -768,6 +795,8 @@ class RenderReachableEdgesWidget(QWidget):
         layout = QVBoxLayout()
         layout.addWidget(label)
         layout.addWidget(self._edge_input)
+        layout.addWidget(steps_label)
+        layout.addWidget(self._steps_spinbox)
         layout.addWidget(run_button)
         layout.addWidget(reset_button)
         layout.addWidget(self._status_label)
@@ -793,7 +822,8 @@ class RenderReachableEdgesWidget(QWidget):
         try:
             edge = next(iter(edges))
             graph = self.viewer.data.skeleton_graph.graph
-            reachable = get_reachable_edges(graph, edge)
+            n_steps = self._steps_spinbox.value() or None
+            reachable = get_reachable_edges(graph, edge, n_steps=n_steps)
             input_key = (edge[0], edge[1])
 
             color_dict: dict[tuple[int, int], np.ndarray] = {}
