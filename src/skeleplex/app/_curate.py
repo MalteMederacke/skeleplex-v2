@@ -720,7 +720,9 @@ def get_reachable_edges(
         # Undirected: entire connected component containing u/v
         component = nx.node_connected_component(graph, u)
         subgraph = graph.subgraph(component)
-        reachable = {(a, b) for a, b in subgraph.edges()}
+        reachable = {(a, b) for a, b in subgraph.edges()} | {
+            (b, a) for a, b in subgraph.edges()
+        }
 
     return reachable
 
