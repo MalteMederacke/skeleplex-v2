@@ -482,6 +482,27 @@ class LoadSegmentationDataGroupBox(QGroupBox):
         )
 
 
+class LoadEdgeColoringGroupBox(QGroupBox):
+    """A widget for loading an edge coloring JSON file."""
+
+    def __init__(self, parent=None):
+        super().__init__(title="Edge Coloring", parent=parent)
+
+        self.load_widget = magicgui(self._load_edge_coloring_gui)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.load_widget.native)
+        self.setLayout(layout)
+
+        self.setStyleSheet(GROUP_BOX_STYLE)
+
+    def _load_edge_coloring_gui(
+        self,
+        json_path: Path | None = None,
+    ) -> Path | None:
+        return json_path
+
+
 class AppControlsWidget(QWidget):
     """A widget for the application controls.
 
@@ -494,11 +515,13 @@ class AppControlsWidget(QWidget):
         # make the widgets for loading data
         self.load_skeleton_group_box = LoadSkeletonDataGroupBox(parent=self)
         self.load_segmentation_group_box = LoadSegmentationDataGroupBox(parent=self)
+        self.load_edge_coloring_group_box = LoadEdgeColoringGroupBox(parent=self)
         stores_box = FlatVGroupBox(
             "Data Stores", accent_color="#b7e2d8", collapsible=True, parent=self
         )
         stores_box.add_widget(self.load_skeleton_group_box)
         stores_box.add_widget(self.load_segmentation_group_box)
+        stores_box.add_widget(self.load_edge_coloring_group_box)
 
         # widget for selecting the skeleton data view
         self.skeleton_view_box = SkeletonDataViewWidget(

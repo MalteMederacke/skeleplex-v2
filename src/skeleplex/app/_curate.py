@@ -1,7 +1,10 @@
+import json
 import numbers
+import re
 from collections import deque
 from copy import deepcopy
 from io import BytesIO
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
 import matplotlib as mpl
@@ -9,9 +12,11 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 from magicgui import magicgui
-from qtpy.QtCore import QByteArray
+from qtpy.QtCore import QByteArray, Qt
 from qtpy.QtGui import QPixmap
 from qtpy.QtWidgets import (
+    QCheckBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -246,7 +251,9 @@ class CurationManager:
 
         # delete the edge from the skeleton graph
         for edge in edges:
-            delete_edge(skeleton_graph=self._data.skeleton_graph, edge=edge, force=force)
+            delete_edge(
+                skeleton_graph=self._data.skeleton_graph, edge=edge, force=force
+            )
 
         if redraw:
             # redraw the graph
@@ -517,7 +524,7 @@ def make_split_edge_widget(viewer):
     point_size = np.max((np.max(viewer.data.node_coordinates) * 0.01, 50))
     split_edge_widget.point_visual, split_edge_widget.point_store = viewer.add_points(
         point_size=point_size
-        )
+    )
     split_edge_widget.point_visual.appearance.visible = False
 
     return split_edge_widget
@@ -623,7 +630,7 @@ class ChangeBranchColorWidget(QWidget):
             if isinstance(value, numbers.Number) and not np.isnan(value)
         ]
         if not values:
-            return 0,0
+            return 0, 0
         return min(values), max(values)
 
     def _on_run_clicked(self):
@@ -741,9 +748,7 @@ def get_reachable_edges(
             nodes_v.add(v)
             nearby_nodes = nodes_u | nodes_v
         subgraph = graph.subgraph(nearby_nodes)
-        reachable = {(a, b) for a, b in subgraph.edges()} | {
-            (b, a) for a, b in subgraph.edges()
-        }
+        reachable = set(subgraph.edges()) | {(b, a) for a, b in subgraph.edges()}
 
     return reachable
 
@@ -982,3 +987,400 @@ def filter_edges_by_attribute(
         default_color=np.array([0, 0, 0, 1], dtype=np.float32),
     )
     viewer.data.edge_colormap = edge_colormap
+
+
+def _parse_edge_tuple(s) -> tuple[int, int]:
+    """Parse a single edge into a (int, int) tuple.
+
+    Accepts a list/array like [1, 2] or a string like '(1, 2)'.
+    """
+    if isinstance(s, list | tuple):
+        val = s
+    else:
+        val = ast.literal_eval(str(s))
+    if len(val) != 2:
+        raise ValueError(f"Edge must have exactly 2 nodes, got: {s!r}")
+    return (int(val[0]), int(val[1]))
+
+
+def _parse_key_edges(key_str: str) -> list[tuple[int, int]]:
+    """Parse a JSON key string into one or more (int, int) edge tuples.
+
+    Handles both a single edge '(1, 2)' and compound keys like
+    '(1881529, 1958293)-(1907667, 1966453)' where two edges are
+    joined by a dash.
+    """
+    matches = re.findall(r"\((\d+),\s*(\d+)\)", key_str)
+    if not matches:
+        raise ValueError(f"Cannot parse edge key: {key_str!r}")
+    return [(int(u), int(v)) for u, v in matches]
+
+
+def _find_shortest_path_edges(
+    graph: nx.Graph,
+    edge1: tuple[int, int],
+    edge2: tuple[int, int],
+) -> list[tuple[int, int]]:
+    """Return the edges on the shortest path connecting two edges.
+
+    Tries all four endpoint combinations of edge1 and edge2 and picks the
+    shortest path found. The input edges themselves are excluded from the
+    result. Returns an empty list when no path exists.
+    """
+    u1, v1 = edge1
+    u2, v2 = edge2
+
+    best_path: list[int] | None = None
+    for src, dst in [(u1, u2), (u1, v2), (v1, u2), (v1, v2)]:
+        try:
+            path = nx.shortest_path(graph, src, dst)
+            if best_path is None or len(path) < len(best_path):
+                best_path = path
+        except (nx.NetworkXNoPath, nx.NodeNotFound):
+            pass
+
+    if best_path is None:
+        return []
+
+    search_edges = {tuple(sorted(edge1)), tuple(sorted(edge2))}
+    return [
+        (best_path[i], best_path[i + 1])
+        for i in range(len(best_path) - 1)
+        if tuple(sorted((best_path[i], best_path[i + 1]))) not in search_edges
+    ]
+
+
+class EdgeColoringNavigatorWidget(QWidget):
+    """Auxiliary widget for navigating through edge coloring entries from a JSON file.
+
+    The JSON file keys identify pairs of red edges (e.g.
+    '(1881529, 1958293)-(1907667, 1966453)'). When an entry is displayed,
+    the shortest path between the two red edges is computed live on the
+    current graph and shown in green. The path is recomputed automatically
+    after any graph change (e.g. edge deletion) and on every navigation step.
+
+    JSON format example::
+
+        {"(1881529, 1958293)-(1907667, 1966453)": []}
+
+    The value list is ignored; only the key is used.
+
+    Parameters
+    ----------
+    viewer : SkelePlexApp
+        The SkelePlex application instance.
+    edge_coloring_path : Path | None
+        Optional path to a JSON file to load immediately on construction.
+    """
+
+    _RED_COLOR = np.array([1.0, 0.0, 0.0, 1.0], dtype=np.float32)
+    _GREEN_COLOR = np.array([0.0, 0.8, 0.0, 1.0], dtype=np.float32)
+    _DEFAULT_BLUE = np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
+
+    def __init__(self, viewer, edge_coloring_path: Path | None = None) -> None:
+        super().__init__()
+        self.viewer = viewer
+
+        # Each entry is just the list of red edges parsed from the JSON key.
+        self._entries: list[list[tuple[int, int]]] = []
+        self._current_index: int = -1
+        # Guard against the colormap-setter's own events.data triggering us.
+        self._applying: bool = False
+        # False = all-blue context view; True = red/green highlight view.
+        self._coloring_active: bool = False
+        # Center of the last auto-computed bounding box; used when user resizes.
+        self._bb_center: np.ndarray | None = None
+
+        self._prev_button = QPushButton("< Prev")
+        self._next_button = QPushButton("Next >")
+        self._entry_label = QLabel("0/0")
+        self._entry_label.setAlignment(Qt.AlignCenter)
+
+        nav_layout = QHBoxLayout()
+        nav_layout.addWidget(self._prev_button)
+        nav_layout.addWidget(self._entry_label)
+        nav_layout.addWidget(self._next_button)
+
+        self._bb_width_spinbox = QSpinBox()
+        self._bb_width_spinbox.setMinimum(0)
+        self._bb_width_spinbox.setMaximum(999999)
+        self._bb_width_spinbox.setSpecialValueText("—")
+
+        self._update_view_button = QPushButton("Update")
+
+        bb_layout = QHBoxLayout()
+        bb_layout.addWidget(QLabel("BB size:"))
+        bb_layout.addWidget(self._bb_width_spinbox)
+        bb_layout.addWidget(self._update_view_button)
+
+        self._render_seg_checkbox = QCheckBox("Render segmentation")
+
+        self._toggle_button = QPushButton("Show coloring")
+        self._reset_button = QPushButton("Reset (full view)")
+        self._status_label = QLabel("")
+        self._status_label.setWordWrap(True)
+
+        self._prev_button.clicked.connect(self._on_prev_clicked)
+        self._next_button.clicked.connect(self._on_next_clicked)
+        self._toggle_button.clicked.connect(self._on_toggle_clicked)
+        self._reset_button.clicked.connect(self._on_reset_clicked)
+        self._render_seg_checkbox.stateChanged.connect(self._on_render_seg_changed)
+        self._update_view_button.clicked.connect(self._on_update_view_clicked)
+
+        layout = QVBoxLayout()
+        layout.addLayout(nav_layout)
+        layout.addLayout(bb_layout)
+        layout.addWidget(self._render_seg_checkbox)
+        layout.addWidget(self._toggle_button)
+        layout.addWidget(self._reset_button)
+        layout.addWidget(self._status_label)
+        self.setLayout(layout)
+
+        viewer.add_auxiliary_widget(self, name="Edge Coloring Navigator")
+
+        # Recompute the shortest path whenever the graph changes (e.g. after
+        # an edge deletion). The _applying flag prevents the colormap setter's
+        # own events.data signal from feeding back here.
+        viewer.data.events.data.connect(self._on_graph_changed)
+
+        if edge_coloring_path is not None:
+            self.load_entries(edge_coloring_path)
+
+    def load_entries(self, path: Path) -> None:
+        """Load red-edge pairs from a JSON file and show the first entry.
+
+        Supports two formats:
+
+        - List format (preferred)::
+
+            [[[u1, v1], [u2, v2]], [[u3, v3], [u4, v4]], ...]
+
+        - Dict format (legacy)::
+
+            {"(u1, v1)-(u2, v2)": [...], ...}
+        """
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            self._set_status(f"File not found: {path}")
+            return
+        except json.JSONDecodeError as e:
+            self._set_status(f"JSON parse error: {e}")
+            return
+
+        entries = []
+        try:
+            if isinstance(data, list):
+                for item in data:
+                    red_edges = [_parse_edge_tuple(e) for e in item]
+                    entries.append(red_edges)
+            else:
+                for key_str in data.keys():
+                    red_edges = _parse_key_edges(key_str)
+                    entries.append(red_edges)
+        except Exception as e:
+            self._set_status(f"Error parsing entries: {e}")
+            return
+
+        self._entries = entries
+        self._current_index = 0 if entries else -1
+        self._update_label()
+
+        if entries:
+            self._apply_current_entry()
+        else:
+            self._set_status("No entries found in file.")
+
+    def _on_file_path_selected(self, path: "Path | None") -> None:
+        """Called when the left-panel file picker selects a new file."""
+        if path is not None:
+            self.load_entries(path)
+
+    def _on_graph_changed(self) -> None:
+        """Recompute the shortest path after any graph structural change."""
+        if self._applying:
+            return
+        if self._current_index >= 0 and self._entries:
+            self._apply_current_entry()
+
+    def _on_prev_clicked(self) -> None:
+        if not self._entries or self._current_index <= 0:
+            return
+        self._current_index -= 1
+        self._update_label()
+        self._apply_current_entry()
+
+    def _on_next_clicked(self) -> None:
+        if not self._entries or self._current_index >= len(self._entries) - 1:
+            return
+        self._current_index += 1
+        self._update_label()
+        self._apply_current_entry()
+
+    def _on_toggle_clicked(self) -> None:
+        self._coloring_active = not self._coloring_active
+        self._toggle_button.setText(
+            "Show all blue" if self._coloring_active else "Show coloring"
+        )
+        current_size = self._bb_width_spinbox.value()
+        self._apply_current_entry(
+            bb_size_override=current_size if current_size > 0 else None
+        )
+
+    def _on_reset_clicked(self) -> None:
+        self._coloring_active = False
+        self._bb_center = None
+        self._toggle_button.setText("Show coloring")
+        self._bb_width_spinbox.blockSignals(True)
+        self._bb_width_spinbox.setValue(0)
+        self._bb_width_spinbox.blockSignals(False)
+        self.viewer.data.skeleton_view.mode = "all"
+        self.viewer.data.segmentation_view.mode = "none"
+        self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
+            colormap={},
+            default_color=self._DEFAULT_BLUE,
+        )
+        self._set_status("")
+
+    def _on_update_view_clicked(self) -> None:
+        custom_size = self._bb_width_spinbox.value()
+        self._apply_current_entry(
+            bb_size_override=custom_size if custom_size > 0 else None
+        )
+
+    def _on_render_seg_changed(self) -> None:
+        if self._bb_center is None:
+            return
+        current_size = self._bb_width_spinbox.value()
+        if current_size <= 0:
+            return
+        half = current_size / 2.0
+        self._apply_bounding_box(self._bb_center - half, self._bb_center + half)
+
+    def _apply_bounding_box(self, bb_min: np.ndarray, bb_max: np.ndarray) -> None:
+        skel_view = self.viewer.data.skeleton_view
+        skel_view.bounding_box._min_coordinate = bb_min
+        skel_view.bounding_box._max_coordinate = bb_max
+        skel_view.mode = "bounding_box"
+
+        if (
+            self._render_seg_checkbox.isChecked()
+            and self.viewer.data._segmentation is not None
+        ):
+            seg_view = self.viewer.data.segmentation_view
+            seg_view.bounding_box._min_coordinate = bb_min
+            seg_view.bounding_box._max_coordinate = bb_max
+            seg_view.mode = "bounding_box"
+        else:
+            self.viewer.data.segmentation_view.mode = "none"
+
+    def _update_label(self) -> None:
+        n = len(self._entries)
+        if n == 0:
+            self._entry_label.setText("0/0")
+        else:
+            self._entry_label.setText(f"{self._current_index + 1}/{n}")
+
+    def _apply_current_entry(self, bb_size_override: int | None = None) -> None:
+        if not self._entries or self._current_index < 0:
+            return
+
+        red_edges = self._entries[self._current_index]
+        graph = self.viewer.data.skeleton_graph
+        if graph is None:
+            self._set_status("No skeleton graph loaded.")
+            return
+
+        warnings = []
+        color_dict: dict[tuple[int, int], np.ndarray] = {}
+        visible_nodes: set[int] = set()
+
+        missing_red = []
+        for r_edge in red_edges:
+            if not graph.graph.has_edge(*r_edge):
+                missing_red.append(r_edge)
+            else:
+                # Add both directions so the colormap lookup succeeds regardless
+                # of the canonical edge direction stored in edge_splines.
+                color_dict[r_edge] = self._RED_COLOR.copy()
+                color_dict[(r_edge[1], r_edge[0])] = self._RED_COLOR.copy()
+                visible_nodes.update(r_edge)
+        if missing_red:
+            warnings.append(f"Red edges not found (deleted?): {missing_red}")
+
+        # Compute shortest path live between the first two red edges.
+        green_edges: list[tuple[int, int]] = []
+        if len(red_edges) >= 2:
+            green_edges = _find_shortest_path_edges(
+                graph.graph, red_edges[0], red_edges[1]
+            )
+            if not green_edges and not missing_red:
+                warnings.append("No path found between the two red edges.")
+            for g_edge in green_edges:
+                color_dict[g_edge] = self._GREEN_COLOR.copy()
+                color_dict[(g_edge[1], g_edge[0])] = self._GREEN_COLOR.copy()
+                visible_nodes.update(g_edge)
+
+        # Zoom to a bounding box that covers all visible nodes with a margin.
+        # Use the full (unfiltered) data arrays for the coordinate lookup.
+        all_node_keys = self.viewer.data.node_keys
+        all_node_coords = self.viewer.data.node_coordinates
+        bb_applied = False
+        if all_node_keys is not None and all_node_coords is not None and visible_nodes:
+            mask = np.isin(all_node_keys, list(visible_nodes))
+            visible_coords = all_node_coords[mask]
+            if len(visible_coords) > 0:
+                bb_min_tight = visible_coords.min(axis=0)
+                bb_max_tight = visible_coords.max(axis=0)
+                margin = np.maximum((bb_max_tight - bb_min_tight) * 0.2, 50.0)
+                bb_min_auto = bb_min_tight - margin
+                bb_max_auto = bb_max_tight + margin
+                self._bb_center = (bb_min_auto + bb_max_auto) / 2
+                if bb_size_override is not None and bb_size_override > 0:
+                    half = bb_size_override / 2.0
+                    bb_min = self._bb_center - half
+                    bb_max = self._bb_center + half
+                    bb_width = bb_size_override
+                else:
+                    bb_min = bb_min_auto
+                    bb_max = bb_max_auto
+                    bb_width = round(float(np.max(bb_max - bb_min)))
+                self._bb_width_spinbox.blockSignals(True)
+                self._bb_width_spinbox.setValue(bb_width)
+                self._bb_width_spinbox.blockSignals(False)
+                self._apply_bounding_box(bb_min, bb_max)
+                bb_applied = True
+
+        if not bb_applied:
+            self._bb_center = None
+            self._bb_width_spinbox.blockSignals(True)
+            self._bb_width_spinbox.setValue(0)
+            self._bb_width_spinbox.blockSignals(False)
+            self.viewer.data.segmentation_view.mode = "none"
+
+        # Guard: the colormap setter emits events.data which would re-enter
+        # here via _on_graph_changed without this flag.
+        self._applying = True
+        try:
+            self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
+                colormap=color_dict if self._coloring_active else {},
+                default_color=self._DEFAULT_BLUE,
+            )
+        finally:
+            self._applying = False
+
+        red_str = ", ".join(str(e) for e in red_edges)
+        path_str = " → ".join(str(e) for e in green_edges) if green_edges else "none"
+        status = (
+            f"Entry {self._current_index + 1}/{len(self._entries)}: "
+            f"{len(red_edges)} red, {len(green_edges)} green edge(s)\n"
+            f"Red: {red_str}\n"
+            f"Path: {path_str}"
+        )
+        if warnings:
+            status += "\n" + "; ".join(warnings)
+        self._set_status(status)
+
+    def _set_status(self, msg: str) -> None:
+        self._status_label.setText(msg)
