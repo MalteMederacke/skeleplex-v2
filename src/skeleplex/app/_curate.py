@@ -1117,8 +1117,6 @@ class EdgeColoringNavigatorWidget(QWidget):
 
         self._toggle_button = QPushButton("Show coloring")
         self._reset_button = QPushButton("Reset (full view)")
-        self._status_label = QLabel("")
-        self._status_label.setWordWrap(True)
 
         self._prev_button.clicked.connect(self._on_prev_clicked)
         self._next_button.clicked.connect(self._on_next_clicked)
@@ -1133,15 +1131,15 @@ class EdgeColoringNavigatorWidget(QWidget):
         layout.addWidget(self._render_seg_checkbox)
         layout.addWidget(self._toggle_button)
         layout.addWidget(self._reset_button)
-        layout.addWidget(self._status_label)
         self.setLayout(layout)
 
         viewer.add_auxiliary_widget(self, name="Edge Coloring Navigator")
 
         # Recompute the shortest path whenever the graph changes (e.g. after
-        # an edge deletion). The _applying flag prevents the colormap setter's
-        # own events.data signal from feeding back here.
-        viewer.data.events.data.connect(self._on_graph_changed)
+        # an edge deletion). skeleton_view.events.data is emitted by
+        # skeleton_view.update(), which is called at the end of
+        # _update_and_request_redraw() after every structural edit.
+        viewer.data.skeleton_view.events.data.connect(self._on_graph_changed)
 
         if edge_coloring_path is not None:
             self.load_entries(edge_coloring_path)
@@ -1202,7 +1200,10 @@ class EdgeColoringNavigatorWidget(QWidget):
         if self._applying:
             return
         if self._current_index >= 0 and self._entries:
-            self._apply_current_entry()
+            current_size = self._bb_width_spinbox.value()
+            self._apply_current_entry(
+                bb_size_override=current_size if current_size > 0 else None
+            )
 
     def _on_prev_clicked(self) -> None:
         if not self._entries or self._current_index <= 0:
@@ -1285,38 +1286,37 @@ class EdgeColoringNavigatorWidget(QWidget):
     def _apply_current_entry(self, bb_size_override: int | None = None) -> None:
         if not self._entries or self._current_index < 0:
             return
+        if self._applying:
+            return
+        self._applying = True
+        try:
+            self._do_apply_current_entry(bb_size_override)
+        finally:
+            self._applying = False
 
+    def _do_apply_current_entry(self, bb_size_override: int | None = None) -> None:
         red_edges = self._entries[self._current_index]
         graph = self.viewer.data.skeleton_graph
         if graph is None:
             self._set_status("No skeleton graph loaded.")
             return
 
-        warnings = []
         color_dict: dict[tuple[int, int], np.ndarray] = {}
         visible_nodes: set[int] = set()
 
-        missing_red = []
         for r_edge in red_edges:
-            if not graph.graph.has_edge(*r_edge):
-                missing_red.append(r_edge)
-            else:
+            if graph.graph.has_edge(*r_edge):
                 # Add both directions so the colormap lookup succeeds regardless
                 # of the canonical edge direction stored in edge_splines.
                 color_dict[r_edge] = self._RED_COLOR.copy()
                 color_dict[(r_edge[1], r_edge[0])] = self._RED_COLOR.copy()
                 visible_nodes.update(r_edge)
-        if missing_red:
-            warnings.append(f"Red edges not found (deleted?): {missing_red}")
 
         # Compute shortest path live between the first two red edges.
-        green_edges: list[tuple[int, int]] = []
         if len(red_edges) >= 2:
             green_edges = _find_shortest_path_edges(
                 graph.graph, red_edges[0], red_edges[1]
             )
-            if not green_edges and not missing_red:
-                warnings.append("No path found between the two red edges.")
             for g_edge in green_edges:
                 color_dict[g_edge] = self._GREEN_COLOR.copy()
                 color_dict[(g_edge[1], g_edge[0])] = self._GREEN_COLOR.copy()
@@ -1359,28 +1359,10 @@ class EdgeColoringNavigatorWidget(QWidget):
             self._bb_width_spinbox.blockSignals(False)
             self.viewer.data.segmentation_view.mode = "none"
 
-        # Guard: the colormap setter emits events.data which would re-enter
-        # here via _on_graph_changed without this flag.
-        self._applying = True
-        try:
-            self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
-                colormap=color_dict if self._coloring_active else {},
-                default_color=self._DEFAULT_BLUE,
-            )
-        finally:
-            self._applying = False
-
-        red_str = ", ".join(str(e) for e in red_edges)
-        path_str = " → ".join(str(e) for e in green_edges) if green_edges else "none"
-        status = (
-            f"Entry {self._current_index + 1}/{len(self._entries)}: "
-            f"{len(red_edges)} red, {len(green_edges)} green edge(s)\n"
-            f"Red: {red_str}\n"
-            f"Path: {path_str}"
+        self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
+            colormap=color_dict if self._coloring_active else {},
+            default_color=self._DEFAULT_BLUE,
         )
-        if warnings:
-            status += "\n" + "; ".join(warnings)
-        self._set_status(status)
 
     def _set_status(self, msg: str) -> None:
-        self._status_label.setText(msg)
+        pass
