@@ -186,7 +186,9 @@ class MainCanvasController:
         if self._skeleton.node_highlight_visual is None:
             # make the highlight points material
             highlight_points_material_3d = PointsUniformAppearance(
-                size=sizes["node_highlight"], color=(0, 1, 0, 1), size_coordinate_space="data"
+                size=sizes["node_highlight"],
+                color=(0, 1, 0, 1),
+                size_coordinate_space="data",
             )
 
             # make the highlight points model
@@ -235,11 +237,15 @@ class MainCanvasController:
         else:
             self._skeleton.node_visual.appearance.size = sizes["node"]
         if self._skeleton.node_highlight_visual is not None:
-            self._skeleton.node_highlight_visual.appearance.size = sizes["node_highlight"]
+            self._skeleton.node_highlight_visual.appearance.size = sizes[
+                "node_highlight"
+            ]
         if self._skeleton.edges_visual is not None:
             self._skeleton.edges_visual.appearance.size = sizes["edge"]
         if self._skeleton.edge_highlight_visual is not None:
-            self._skeleton.edge_highlight_visual.appearance.size = sizes["edge_highlight"]
+            self._skeleton.edge_highlight_visual.appearance.size = sizes[
+                "edge_highlight"
+            ]
 
         # reslice the scene
         self._backend.reslice_scene(scene_id=self.scene_id)
@@ -260,6 +266,9 @@ class MainCanvasController:
             The 4x4 affine transform to apply to the segmentation image.
         """
         if image is None:
+            if self._segmentation.visual is not None:
+                self._segmentation.visual.appearance.visible = False
+                self._backend.reslice_scene(scene_id=self.scene_id)
             return
 
         # make the segmentation data store
@@ -299,6 +308,7 @@ class MainCanvasController:
 
         else:
             self._segmentation.visual.transform = transform
+            self._segmentation.visual.appearance.visible = True
 
         # reslice the scene
         self._backend.reslice_scene(scene_id=self.scene_id)

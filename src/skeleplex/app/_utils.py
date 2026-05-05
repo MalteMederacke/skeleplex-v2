@@ -13,9 +13,11 @@ from skeleplex.app import (
     SkeletonDataPaths,
     SkeletonGraphFile,
 )
-from skeleplex.app._curate import (ChangeBranchColorWidget,
-                                   make_split_edge_widget,
-                                   RenderReachableEdgesWidget
+from skeleplex.app._curate import (
+    ChangeBranchColorWidget,
+    EdgeColoringNavigatorWidget,
+    RenderReachableEdgesWidget,
+    make_split_edge_widget,
 )
 
 # store reference to QApplication to prevent garbage collection
@@ -27,6 +29,7 @@ def view_skeleton(
     segmentation_path: str | None = None,
     segmentation_voxel_size_um: tuple[float, float, float] = (1, 1, 1),
     launch_widgets: bool = True,
+    edge_coloring_path: str | None = None,
 ):
     """Launch the skeleton viewer application.
 
@@ -42,6 +45,12 @@ def view_skeleton(
     launch_widgets : bool, optional
         Whether to launch the auxiliary widgets for curation.
         Defaults to True.
+    edge_coloring_path : str | None
+        Path to a JSON file for edge coloring navigation.
+        The JSON maps red-edge keys (e.g. '(1, 2)') to lists of green-edge
+        keys. The Edge Coloring Navigator widget allows stepping through
+        entries. The file can also be loaded interactively via the Data Stores
+        panel in the GUI.
 
     Returns
     -------
@@ -123,6 +132,14 @@ def view_skeleton(
             )
             viewer.add_auxiliary_widget(split_edge_widget.native, name="Split edge")
             RenderReachableEdgesWidget(viewer)
+
+            coloring_path = Path(edge_coloring_path) if edge_coloring_path else None
+            edge_coloring_widget = EdgeColoringNavigatorWidget(
+                viewer, edge_coloring_path=coloring_path
+            )
+            viewer._main_window.app_controls.widget().load_edge_coloring_group_box.load_widget.called.connect(
+                edge_coloring_widget._on_file_path_selected
+            )
 
         except Exception as e:
             print(f"Error launching widgets: {e}")
