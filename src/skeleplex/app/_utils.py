@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 
 from IPython import get_ipython
@@ -13,9 +12,11 @@ from skeleplex.app import (
     SkeletonDataPaths,
     SkeletonGraphFile,
 )
-from skeleplex.app._curate import (ChangeBranchColorWidget,
-                                   make_split_edge_widget,
-                                   RenderReachableEdgesWidget
+from skeleplex.app._curate import (
+    ChangeBranchColorWidget,
+    RenderAroundNodeWidget,
+    RenderReachableEdgesWidget,
+    make_split_edge_widget,
 )
 
 # store reference to QApplication to prevent garbage collection
@@ -91,13 +92,7 @@ def view_skeleton(
             delete_edge_widget = magicgui(
                 viewer.curate.delete_edge,
             )
-            render_around_node_widget = magicgui(
-                viewer.curate.render_around_node,
-                node_id={
-                    "widget_type": "LineEdit",
-                },
-                bounding_box_width={"min": 0, "max": sys.float_info.max},
-            )
+            render_around_node_widget = RenderAroundNodeWidget(viewer)
 
             connect_without_merging_widget = magicgui(
                 viewer.curate.connect_without_merging,
@@ -112,9 +107,7 @@ def view_skeleton(
             # add to viewer
             viewer.add_auxiliary_widget(undo_widget.native, name="Undo")
             viewer.add_auxiliary_widget(delete_edge_widget.native, name="Delete edge")
-            viewer.add_auxiliary_widget(
-                render_around_node_widget.native, name="Render around node"
-            )
+
             viewer.add_auxiliary_widget(
                 connect_without_merging_widget.native, name="Connect without merging"
             )

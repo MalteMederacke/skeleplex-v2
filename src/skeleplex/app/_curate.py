@@ -12,6 +12,8 @@ from magicgui import magicgui
 from qtpy.QtCore import QByteArray
 from qtpy.QtGui import QPixmap
 from qtpy.QtWidgets import (
+    QCheckBox,
+    QDoubleSpinBox,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -21,8 +23,10 @@ from qtpy.QtWidgets import (
 )
 
 from skeleplex.graph.constants import (
+    EDGE_COORDINATES_KEY,
     EDGE_SPLINE_KEY,
     GENERATION_KEY,
+    LENGTH_KEY,
     NODE_COORDINATE_KEY,
 )
 from skeleplex.graph.modify_graph import (
@@ -458,6 +462,132 @@ class CurationManager:
 
         # Update the data view
         self._data.skeleton_view.update()
+
+
+class RenderAroundNodeWidget(QWidget):
+    """Widget for rendering around a node and pruning short edges in the bounding box."""
+
+    def __init__(self, viewer) -> None:
+        super().__init__()
+        self.viewer = viewer
+        self._bbox_min: np.ndarray | None = None
+        self._bbox_max: np.ndarray | None = None
+
+        node_label = QLabel("Node ID:")
+        self._node_input = QLineEdit()
+        self._node_input.setPlaceholderText("e.g. {1}")
+
+        bbox_label = QLabel("Bounding box width:")
+        self._bbox_spinbox = QDoubleSpinBox()
+        self._bbox_spinbox.setMinimum(0)
+        self._bbox_spinbox.setMaximum(1e9)
+        self._bbox_spinbox.setValue(100)
+
+        self._segmentation_checkbox = QCheckBox("Render segmentation")
+
+        render_button = QPushButton("Render around node")
+        render_button.clicked.connect(self._on_render_clicked)
+
+        threshold_label = QLabel("Min length threshold:")
+        self._threshold_spinbox = QDoubleSpinBox()
+        self._threshold_spinbox.setMinimum(0)
+        self._threshold_spinbox.setMaximum(1e9)
+        self._threshold_spinbox.setValue(10.0)
+
+        delete_button = QPushButton("Delete short edges in bbox (force)")
+        delete_button.clicked.connect(self._on_delete_clicked)
+
+        self._status_label = QLabel("")
+        self._status_label.setWordWrap(True)
+
+        layout = QVBoxLayout()
+        layout.addWidget(node_label)
+        layout.addWidget(self._node_input)
+        layout.addWidget(bbox_label)
+        layout.addWidget(self._bbox_spinbox)
+        layout.addWidget(self._segmentation_checkbox)
+        layout.addWidget(render_button)
+        layout.addWidget(threshold_label)
+        layout.addWidget(self._threshold_spinbox)
+        layout.addWidget(delete_button)
+        layout.addWidget(self._status_label)
+        self.setLayout(layout)
+
+        viewer.add_auxiliary_widget(self, name="Render around node")
+
+    def _set_status(self, msg: str) -> None:
+        self._status_label.setText(msg)
+
+    def _on_render_clicked(self) -> None:
+        self._set_status("")
+        try:
+            node_id = node_string_to_node_keys(self._node_input.text())
+            node_id = next(iter(node_id), None)
+            if node_id is None:
+                self._set_status("No node parsed.")
+                return
+            width = self._bbox_spinbox.value()
+            render_seg = self._segmentation_checkbox.isChecked()
+            self.viewer.curate.render_around_node(
+                node_id=str({node_id}),
+                bounding_box_width=width,
+                render_segmentation=render_seg,
+            )
+            half = width / 2
+            graph = self.viewer.data.skeleton_graph.graph
+            coord = graph.nodes[node_id][NODE_COORDINATE_KEY]
+            self._bbox_min = coord - half
+            self._bbox_max = coord + half
+            self._set_status(f"Rendering around node {node_id}.")
+        except Exception as e:
+            self._set_status(f"Error: {e}")
+
+    def _on_delete_clicked(self) -> None:
+        self._set_status("")
+        if self._bbox_min is None or self._bbox_max is None:
+            self._set_status("Render around a node first.")
+            return
+        try:
+            threshold = self._threshold_spinbox.value()
+            graph = self.viewer.data.skeleton_graph.graph
+            to_delete = []
+            for u, v, data in graph.edges(data=True):
+                u_coord = graph.nodes[u][NODE_COORDINATE_KEY]
+                v_coord = graph.nodes[v][NODE_COORDINATE_KEY]
+                u_in = np.all(u_coord >= self._bbox_min) and np.all(
+                    u_coord <= self._bbox_max
+                )
+                v_in = np.all(v_coord >= self._bbox_min) and np.all(
+                    v_coord <= self._bbox_max
+                )
+                if not (u_in or v_in):
+                    continue
+                length = data.get(LENGTH_KEY)
+                if length is None:
+                    coords = data.get(EDGE_COORDINATES_KEY)
+                    if coords is not None:
+                        length = float(
+                            np.sum(np.linalg.norm(np.diff(coords, axis=0), axis=1))
+                        )
+                if length is not None and length < threshold:
+                    to_delete.append((u, v))
+            if not to_delete:
+                self._set_status("No short edges found in bounding box.")
+                return
+            self.viewer.curate._undo_buffer.push(
+                deepcopy(self.viewer.data.skeleton_graph)
+            )
+            for edge in to_delete:
+                if graph.has_edge(*edge):
+                    delete_edge(
+                        skeleton_graph=self.viewer.data.skeleton_graph,
+                        edge=edge,
+                        force=True,
+                    )
+            self.viewer.curate._update_and_request_redraw()
+            self._set_status(f"Deleted {len(to_delete)} short edge(s).")
+        except Exception as e:
+            self._set_status(f"Error: {e}")
 
 
 def make_split_edge_widget(viewer):

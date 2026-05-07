@@ -1,19 +1,23 @@
-import networkx as nx  # noqa: D100
-import numpy as np
-import functools
+import functools  # noqa: D100
 import logging
+import os
+from concurrent.futures import ThreadPoolExecutor
+
+import networkx as nx
+import numpy as np
 
 from skeleplex.graph.constants import (
+    BRANCH_CURVATURE_EDGE_KEY,
     DAUGHTER_EDGES_KEY,
+    EDGE_COORDINATES_KEY,
     EDGE_SPLINE_KEY,
+    EDGE_ID_KEY,
     GENERATION_KEY,
     LENGTH_KEY,
     NUMBER_OF_TIPS_KEY,
+    PARENT_EDGE_ID_KEY,
     PARENT_EDGE_KEY,
     SISTER_EDGE_KEY,
-    EDGE_ID_KEY,
-    PARENT_EDGE_ID_KEY,
-    BRANCH_CURVATURE_EDGE_KEY
 )
 
 logger = logging.getLogger(__name__)
@@ -228,11 +232,23 @@ def compute_branch_length(graph):
         The graph with branch lengths annotated.
     """
     graph = graph.copy()
-    length_dir = {}
-    for u, v in graph.edges():
-        spline = graph[u][v][EDGE_SPLINE_KEY]
-        length = spline.arc_length
-        length_dir[(u, v)] = length
+    is_multi = graph.is_multigraph()
+    edges = list(graph.edges(data=True, keys=True) if is_multi
+                 else graph.edges(data=True))
+
+    def _length(edge):
+        if is_multi:
+            u, v, key, attr = edge
+            edge_id = (u, v, key)
+        else:
+            u, v, attr = edge
+            edge_id = (u, v)
+        coords = attr[EDGE_COORDINATES_KEY]
+        return edge_id, float(np.sum(np.linalg.norm(np.diff(coords, axis=0), axis=1)))
+
+    with ThreadPoolExecutor(max_workers=os.cpu_count()) as pool:
+        length_dir = dict(pool.map(_length, edges))
+
     nx.set_edge_attributes(graph, length_dir, LENGTH_KEY)
     return graph
 

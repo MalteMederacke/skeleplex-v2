@@ -1,4 +1,6 @@
 import logging  # noqa: D100
+import os
+from concurrent.futures import ThreadPoolExecutor
 
 import networkx as nx
 import numpy as np
@@ -16,6 +18,8 @@ from skeleplex.graph.constants import (
 from skeleplex.graph.skeleton_graph import SkeletonGraph, get_next_node_key
 from skeleplex.graph.spline import B3Spline
 
+from tqdm import tqdm
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
@@ -28,6 +32,65 @@ def _get_edge_data(graph, u, v):
     if graph.is_multigraph():
         return data[min(data.keys())]
     return data
+
+
+def _compute_merge_attributes(graph, n1, v1, n2):
+    """Compute merged edge attributes for merging v1 out of the path n1-v1-n2.
+
+    Pure computation — reads the graph but does not mutate it.
+
+    Returns
+    -------
+    tuple : (new_edge, attrs_dict) where new_edge is (n1, n2) or (n2, n1).
+    """
+    start_node = graph.nodes[n1][NODE_COORDINATE_KEY]
+    end_node = graph.nodes[n2][NODE_COORDINATE_KEY]
+    middle_node = graph.nodes[v1][NODE_COORDINATE_KEY]
+
+    if graph.has_edge(n1, v1) and graph.has_edge(v1, n2):
+        edge1, edge2, new_edge = (n1, v1), (v1, n2), (n1, n2)
+    elif graph.has_edge(v1, n2) and graph.has_edge(n1, v1):
+        edge1, edge2, new_edge = (v1, n2), (n1, v1), (n2, n1)
+    elif graph.has_edge(n1, v1) and graph.has_edge(n2, v1):
+        edge1, edge2, new_edge = (n1, v1), (n2, v1), (n1, n2)
+    elif graph.has_edge(v1, n2) and graph.has_edge(n2, v1):
+        edge1, edge2, new_edge = (v1, n2), (n2, v1), (n1, n2)
+    else:
+        raise ValueError(f"Edges {n1, v1} and {v1, n2} not found in graph.")
+
+    attr1 = _get_edge_data(graph, edge1[0], edge1[1])
+    attr2 = _get_edge_data(graph, edge2[0], edge2[1])
+
+    merge_attrs = {}
+    for key in attr1:
+        if key == VALIDATION_KEY:
+            merge_attrs[key] = bool(attr1[key] and attr2[key])
+        elif key == EDGE_SPLINE_KEY:
+            pts1 = attr1[EDGE_COORDINATES_KEY]
+            pts2 = attr2[EDGE_COORDINATES_KEY]
+            if np.allclose(pts1[0], start_node) and np.allclose(pts2[0], middle_node):
+                spline_points = np.vstack((pts1, pts2))
+            elif np.allclose(pts1[-1], start_node) and np.allclose(pts2[0], middle_node):
+                spline_points = np.vstack((np.flip(pts1, axis=0), pts2))
+            elif np.allclose(pts1[0], start_node) and np.allclose(pts2[-1], middle_node):
+                spline_points = np.vstack((pts1, np.flip(pts2, axis=0)))
+            else:
+                spline_points = np.vstack((np.flip(pts1, axis=0), np.flip(pts2, axis=0)))
+            _, idx = np.unique(spline_points, axis=0, return_index=True)
+            spline_points = spline_points[np.sort(idx)]
+            spline = B3Spline.from_points(spline_points)
+            merge_attrs[EDGE_SPLINE_KEY] = spline
+            merge_attrs[EDGE_COORDINATES_KEY] = spline_points
+        elif key == START_NODE_KEY:
+            merge_attrs[key] = n1
+        elif key == END_NODE_KEY:
+            merge_attrs[key] = n2
+        elif key == GENERATION_KEY:
+            merge_attrs[key] = attr1[key]
+        elif key == LENGTH_KEY:
+            merge_attrs[key] = merge_attrs[EDGE_SPLINE_KEY].arc_length
+
+    return new_edge, edge1, edge2, v1, merge_attrs
 
 
 def merge_edge(skeleton_graph: SkeletonGraph, n1: int, v1: int, n2: int):
@@ -60,125 +123,19 @@ def merge_edge(skeleton_graph: SkeletonGraph, n1: int, v1: int, n2: int):
     """
     graph = skeleton_graph.graph.copy()
 
-    start_node = graph.nodes(data=True)[n1][NODE_COORDINATE_KEY]
-    end_node = graph.nodes(data=True)[n2][NODE_COORDINATE_KEY]
-    middle_node = graph.nodes(data=True)[v1][NODE_COORDINATE_KEY]
-
     if graph.degree(v1) != 2:
         raise ValueError(
-            f"Node {v1} has degree {graph.degree(middle_node)}. "
+            f"Node {v1} has degree {graph.degree(v1)}. "
             "Only nodes with degree 2 can be merged."
         )
 
-    # adapt for directed graphs
-    if graph.has_edge(n1, v1) and graph.has_edge(v1, n2):
-        edge1 = (n1, v1)
-        edge2 = (v1, n2)
-        merge_edge = (n1, n2)
-    # first flipped
-    elif graph.has_edge(v1, n2) and graph.has_edge(n1, v1):
-        edge1 = (v1, n2)
-        edge2 = (n1, v1)
-        merge_edge = (n2, n1)
-    # second flipped
-    elif graph.has_edge(n1, v1) and graph.has_edge(n2, v1):
-        edge1 = (n1, v1)
-        edge2 = (n2, v1)
-        merge_edge = (n1, n2)
-    # both flipped
-    elif graph.has_edge(v1, n2) and graph.has_edge(n2, v1):
-        edge1 = (v1, n2)
-        edge2 = (n2, v1)
-        merge_edge = (n1, n2)
-    else:
-        raise ValueError(
-            f"Edges {n1, v1} and {v1, n2} not found in graph. "
-            "Are you trying to merge nodes that are not connected?"
-        )
-
-    # edge1 = (start_node, middle_node)
-    # edge2 = (middle_node, end_node)
-
-    edge_attributes1 = _get_edge_data(graph, edge1[0], edge1[1])
-    edge_attributes2 = _get_edge_data(graph, edge2[0], edge2[1])
-    graph.remove_edge(edge1[0], edge1[1])
-    graph.remove_edge(edge2[0], edge2[1])
-    graph.remove_node(edge1[1])
-    # merge_edge = (edge1[0], edge2[1])
-    merge_attributes = {}
-    for key in edge_attributes1:
-        if key == VALIDATION_KEY:
-            if edge_attributes1[key] and edge_attributes2[key]:
-                merge_attributes[key] = True
-            else:
-                merge_attributes[key] = False
-
-        if key == EDGE_SPLINE_KEY:
-            points1 = edge_attributes1[EDGE_COORDINATES_KEY]
-            points2 = edge_attributes2[EDGE_COORDINATES_KEY]
-
-            # start and end node coordinates
-            # this checking is probably not necessary as we use directed graphs
-            # but just to be sure
-            if np.allclose(points1[0], start_node) & np.allclose(
-                points2[0], middle_node
-            ):
-                logger.info("None of the edges need to be flipped")
-                spline_points = np.vstack((points1, points2))
-
-            elif np.allclose(points1[-1], start_node) & np.allclose(
-                points2[0], middle_node
-            ):
-                logger.info(f"flip edge {edge1}")
-                spline_points = np.vstack((np.flip(points1, axis=0), points2))
-            elif np.allclose(points1[0], start_node) & np.allclose(
-                points2[-1], middle_node
-            ):
-                logger.info(f"flip {edge2}")
-                spline_points = np.vstack((points1, np.flip(points2, axis=0)))
-            elif np.allclose(points1[-1], start_node) & np.allclose(
-                points2[-1], middle_node
-            ):
-                logger.info(f"flip {edge1} and {edge2}")
-                spline_points = np.vstack(
-                    (np.flip(points1, axis=0), np.flip(points2, axis=0))
-                )
-            else:
-                logger.warning("Warning: Edge splines not connected.")
-                spline_points = np.vstack((points1, points2))
-            # sanity check
-            if np.allclose(spline_points[-1], end_node):
-                logger.info("sanity check passed")
-
-            _, idx = np.unique(spline_points, axis=0, return_index=True)
-            spline_points = spline_points[np.sort(idx)]
-            spline = B3Spline.from_points(spline_points)
-            merge_attributes[key] = spline
-            merge_attributes[EDGE_COORDINATES_KEY] = spline_points
-        if key == START_NODE_KEY:
-            merge_attributes[key] = n1
-        if key == END_NODE_KEY:
-            merge_attributes[key] = n2
-        if key == GENERATION_KEY:
-            merge_attributes[key] = edge_attributes1[key]
-
-        if key == LENGTH_KEY:
-            merge_attributes[key] = merge_attributes[EDGE_SPLINE_KEY].arc_length
-
-        if key not in [
-            VALIDATION_KEY,
-            EDGE_COORDINATES_KEY,
-            EDGE_SPLINE_KEY,
-            START_NODE_KEY,
-            END_NODE_KEY,
-            GENERATION_KEY,
-            LENGTH_KEY,
-        ]:
-            logger.warning(
-                (f"Warning: Attribute {key} not merged. ", "Consider recomputing.")
-            )
-
-    graph.add_edge(*merge_edge, **merge_attributes)
+    new_edge, edge1, edge2, mid, merge_attributes = _compute_merge_attributes(
+        graph, n1, v1, n2
+    )
+    graph.remove_edge(*edge1)
+    graph.remove_edge(*edge2)
+    graph.remove_node(mid)
+    graph.add_edge(*new_edge, **merge_attributes)
     skeleton_graph.graph = graph
 
 
@@ -254,8 +211,6 @@ def length_pruning(skeleton_graph: SkeletonGraph, length_threshold: int):
         The graph to prune.
     length_threshold : int
         The threshold for the length of the edges.
-
-
     """
     graph = skeleton_graph.graph
     g_unmodified = graph.copy()
@@ -265,25 +220,110 @@ def length_pruning(skeleton_graph: SkeletonGraph, length_threshold: int):
         len_dict = skeleton_graph.compute_branch_lengths()
         nx.set_edge_attributes(graph, len_dict, LENGTH_KEY)
 
-    for node, degree in g_unmodified.degree():
-        if (degree == 1) and (node != skeleton_graph.origin):
-            if graph.is_directed():
-                edge = next(iter(graph.in_edges(node)))
-            else:
-                edge = next(iter(graph.edges(node)))
-            path_length = graph.edges[edge[0], edge[1]].get(LENGTH_KEY)
-            # start_node = edge[0]
-            if path_length < length_threshold:
-                # check if edge still exists in original graph
-                if edge not in skeleton_graph.graph.edges:
-                    continue
-                try:
-                    delete_edge(skeleton_graph, edge)
-                    logger.info(f"Deleted {edge}")
-                except KeyError:
-                    logger.warning(f"Edge {edge} not found in graph, could not delete.")
-                except Exception as e:
-                    logger.error(f"Unexpected error while deleting {edge}: {e}")
+    # --- Pass 1: collect short leaf edges (read-only, no copies) ---
+    # At most one leaf per parent: if both siblings are short the first deletion
+    # triggers a merge that removes the other edge, so the second must be skipped.
+    edges_to_delete = []
+    parent_nodes = set()
+    used_parents = set()
+    for node, degree in tqdm(g_unmodified.degree(), desc="Processing nodes"):
+        if degree != 1 or node == skeleton_graph.origin:
+            continue
+        if g_unmodified.is_directed():
+            edge = next(iter(g_unmodified.in_edges(node)))
+        else:
+            edge = next(iter(g_unmodified.edges(node)))
+        path_length = _get_edge_data(g_unmodified, edge[0], edge[1]).get(LENGTH_KEY)
+        if path_length is not None and path_length < length_threshold:
+            parent = edge[0] if edge[1] == node else edge[1]
+            if parent in used_parents:
+                continue
+            edges_to_delete.append(edge)
+            parent_nodes.add(parent)
+            used_parents.add(parent)
+
+    if not edges_to_delete:
+        return
+
+    # --- Pass 2: one graph copy, batch-remove all edges ---
+    working = skeleton_graph.graph.copy()
+    for edge in tqdm(edges_to_delete, desc="Deleting edges"):
+        if working.has_edge(*edge):
+            working.remove_edge(*edge)
+            logger.info(f"Deleted {edge}")
+
+    working.remove_nodes_from(list(nx.isolates(working)))
+    skeleton_graph.graph = working
+
+    # --- Pass 3: merge parents that became degree-2 ---
+    # Collect (n1, parent, n2) for each eligible parent.
+    merge_ops = []
+    for parent in parent_nodes:
+        if parent not in skeleton_graph.graph:
+            continue
+        if skeleton_graph.graph.degree(parent) != 2:
+            continue
+        if skeleton_graph.graph.is_directed():
+            in_e = list(skeleton_graph.graph.in_edges(parent))
+            out_e = list(skeleton_graph.graph.out_edges(parent))
+            if len(in_e) == 1 and len(out_e) == 1:
+                merge_ops.append((in_e[0][0], parent, out_e[0][1]))
+        else:
+            nb = list(skeleton_graph.graph.neighbors(parent))
+            if len(nb) == 2:
+                merge_ops.append((nb[0], parent, nb[1]))
+
+    # Partition into independent (disjoint node sets) and dependent.
+    independent, dependent = [], []
+    claimed = set()
+    for n1, v1, n2 in merge_ops:
+        involved = {n1, v1, n2}
+        if involved.isdisjoint(claimed):
+            independent.append((n1, v1, n2))
+            claimed |= involved
+        else:
+            dependent.append((n1, v1, n2))
+
+    # Independent: compute attributes in parallel (expensive spline fitting),
+    # then apply all graph mutations on one copy.
+    if independent:
+        graph_snapshot = skeleton_graph.graph
+
+        def _compute(args):
+            try:
+                return _compute_merge_attributes(graph_snapshot, *args)
+            except Exception as e:
+                logger.warning(f"Could not compute merge for {args}: {e}")
+                return None
+
+        with ThreadPoolExecutor(max_workers=os.cpu_count()) as pool:
+            results = list(tqdm(
+                pool.map(_compute, independent),
+                total=len(independent),
+                desc="Merging independent parents",
+            ))
+
+        working = skeleton_graph.graph.copy()
+        for res in results:
+            if res is None:
+                continue
+            new_edge, edge1, edge2, mid, attrs = res
+            if working.has_node(mid):
+                working.remove_edge(*edge1)
+                working.remove_edge(*edge2)
+                working.remove_node(mid)
+                working.add_edge(*new_edge, **attrs)
+        skeleton_graph.graph = working
+
+    # Dependent: fall back to sequential merge_edge.
+    for n1, v1, n2 in tqdm(dependent, desc="Merging dependent parents"):
+        try:
+            merge_edge(skeleton_graph, n1, v1, n2)
+        except Exception as e:
+            logger.warning(f"Could not merge node {v1}: {e}")
+
+    skeleton_graph.graph.remove_nodes_from(list(nx.isolates(skeleton_graph.graph)))
+    logger.info(f"Pruned {len(edges_to_delete)} short leaf edges.")
 
 
 def prune_degree_2_nodes(skeleton_graph: SkeletonGraph):

@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import dask
 import dask.array as da
@@ -589,12 +590,26 @@ class SkeletonGraph:
     def compute_branch_lengths(self) -> dict:
         """Return a dictionary of edge lengths.
 
-        The keys of the dictionary are the edge tuples, the values are arc lengths
-        of the fitted splines. Units will be the same as voxel scale.
+        The keys of the dictionary are the edge tuples, the values are the
+        polyline lengths of the sampled edge coordinates. Units will be the
+        same as voxel scale.
         """
-        edge_lengths = {}
-        for u, v, attr in self.graph.edges(data=True):
-            edge_lengths[(u, v)] = attr[EDGE_SPLINE_KEY].arc_length
+        is_multi = self.graph.is_multigraph()
+        edges = list(self.graph.edges(data=True, keys=True) if is_multi
+                     else self.graph.edges(data=True))
+
+        def _length(edge):
+            if is_multi:
+                u, v, key, attr = edge
+                edge_id = (u, v, key)
+            else:
+                u, v, attr = edge
+                edge_id = (u, v)
+            coords = attr[EDGE_COORDINATES_KEY]
+            return edge_id, float(np.sum(np.linalg.norm(np.diff(coords, axis=0), axis=1)))
+
+        with ThreadPoolExecutor(max_workers=os.cpu_count()) as pool:
+            edge_lengths = dict(pool.map(_length, edges))
 
         nx.set_edge_attributes(self.graph, edge_lengths, LENGTH_KEY)
         return edge_lengths
