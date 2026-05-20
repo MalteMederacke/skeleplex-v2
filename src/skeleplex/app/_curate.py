@@ -14,6 +14,7 @@ from qtpy.QtGui import QPixmap
 from qtpy.QtWidgets import (
     QCheckBox,
     QDoubleSpinBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -35,6 +36,7 @@ from skeleplex.graph.modify_graph import (
     merge_nodes,
     split_edge,
 )
+from skeleplex.graph.utils import draw_line_segment
 from skeleplex.visualize import EdgeColormap
 
 if TYPE_CHECKING:
@@ -42,6 +44,11 @@ if TYPE_CHECKING:
     from skeleplex.app._data import DataManager
 
 import ast
+
+from skan import Skeleton
+from skimage.morphology import label as sk_label
+
+from skeleplex.graph.break_detection import find_breaks_in_skeleton
 
 
 def edge_string_to_key(edge_string: str) -> set[tuple[int, ...]]:
@@ -590,6 +597,382 @@ class RenderAroundNodeWidget(QWidget):
             self._set_status(f"Error: {e}")
 
 
+class BreakDetectionWidget(QWidget):
+    """Widget for detecting breaks at a selected skeleton edge.
+
+    Loads a segmentation chunk around the edge, rasterizes the local graph
+    edges into a binary skeleton image, then runs skan-based break detection
+    to find endpoints that can be connected through the segmentation.
+
+    Source endpoints are shown as one point cloud, suggested destinations
+    as another. The first run may be slow due to numba JIT compilation.
+
+    Parameters
+    ----------
+    viewer : SkelePlexApp
+        The SkelePlex application instance.
+    """
+
+    def __init__(self, viewer) -> None:
+        super().__init__()
+        self.viewer = viewer
+        self._source_visual = None
+        self._source_store = None
+        self._dest_visual = None
+        self._dest_store = None
+
+        edge_label = QLabel("Edge key:")
+        self._edge_input = QLineEdit()
+        self._edge_input.setPlaceholderText("e.g. {(1, 2)}")
+
+        margin_label = QLabel("BBox margin (µm):")
+        self._margin_spinbox = QDoubleSpinBox()
+        self._margin_spinbox.setMinimum(0)
+        self._margin_spinbox.setMaximum(1e9)
+        self._margin_spinbox.setValue(200.0)
+
+        radius_label = QLabel("Search radius (voxels):")
+        self._radius_spinbox = QDoubleSpinBox()
+        self._radius_spinbox.setMinimum(1)
+        self._radius_spinbox.setMaximum(1e6)
+        self._radius_spinbox.setValue(50.0)
+
+        self._use_angles_checkbox = QCheckBox("Use angle filtering")
+        self._use_angles_checkbox.setChecked(True)
+
+        angle_label = QLabel("Angle threshold (°):")
+        self._angle_spinbox = QDoubleSpinBox()
+        self._angle_spinbox.setMinimum(0)
+        self._angle_spinbox.setMaximum(180)
+        self._angle_spinbox.setValue(90.0)
+
+        run_button = QPushButton("Run break detection")
+        run_button.clicked.connect(self._on_run_clicked)
+
+        clear_button = QPushButton("Clear results")
+        clear_button.clicked.connect(self._on_clear_clicked)
+
+        self._status_label = QLabel("")
+        self._status_label.setWordWrap(True)
+
+        layout = QVBoxLayout()
+        layout.addWidget(edge_label)
+        layout.addWidget(self._edge_input)
+        layout.addWidget(margin_label)
+        layout.addWidget(self._margin_spinbox)
+        layout.addWidget(radius_label)
+        layout.addWidget(self._radius_spinbox)
+        layout.addWidget(self._use_angles_checkbox)
+        layout.addWidget(angle_label)
+        layout.addWidget(self._angle_spinbox)
+        layout.addWidget(run_button)
+        layout.addWidget(clear_button)
+        layout.addWidget(self._status_label)
+        self.setLayout(layout)
+
+        viewer.add_auxiliary_widget(self, name="Break Detection")
+
+    def _set_status(self, msg: str) -> None:
+        self._status_label.setText(msg)
+
+    def _on_run_clicked(self) -> None:
+        self._set_status("Running… (first run may be slow due to JIT compilation)")
+        try:
+            # --- 1. Parse edge ---
+            edges = edge_string_to_key(self._edge_input.text())
+            if not edges:
+                self._set_status("No edge parsed.")
+                return
+            u, v = next(iter(edges))[:2]
+
+            graph = self.viewer.data.skeleton_graph.graph
+            if not graph.has_edge(u, v):
+                self._set_status(f"Edge ({u}, {v}) not in graph.")
+                return
+
+            edata = graph[u][v]
+            if graph.is_multigraph():
+                edata = edata[min(edata.keys())]
+            edge_coords = edata[EDGE_COORDINATES_KEY]  # (N, 3) in (z,y,x) µm
+
+            # --- 2. Bounding box around the edge ---
+            margin = self._margin_spinbox.value()
+            bbox_min_world = edge_coords.min(axis=0) - margin
+            bbox_max_world = edge_coords.max(axis=0) + margin
+
+            # --- 3. Load segmentation chunk ---
+            segmentation = self.viewer.data.segmentation
+            if segmentation is None:
+                self._set_status("No segmentation loaded.")
+                return
+
+            scale = np.array(self.viewer.data.segmentation_scale)  # (z, y, x) µm/vx
+            seg_shape = np.array(segmentation.shape)
+
+            bbox_min_vx = np.maximum(
+                np.round(bbox_min_world / scale), 0
+            ).astype(np.int64)
+            bbox_max_vx = np.minimum(
+                np.round(bbox_max_world / scale), seg_shape
+            ).astype(np.int64)
+
+            if np.any(bbox_min_vx >= bbox_max_vx):
+                self._set_status("Bounding box is empty after clamping.")
+                return
+
+            self._set_status("Loading segmentation chunk…")
+            seg_chunk = np.asarray(
+                segmentation[
+                    bbox_min_vx[0] : bbox_max_vx[0],
+                    bbox_min_vx[1] : bbox_max_vx[1],
+                    bbox_min_vx[2] : bbox_max_vx[2],
+                ]
+            )
+            chunk_shape = np.array(seg_chunk.shape)
+
+            # --- 4. Rasterize all graph edges in the chunk ---
+            self._set_status("Rasterizing skeleton…")
+            skeleton_image = np.zeros(chunk_shape, dtype=np.uint8)
+
+            if graph.is_multigraph():
+                edge_iter = [
+                    attrs
+                    for _, _, attrs in graph.edges(data=True, keys=False)
+                ]
+            else:
+                edge_iter = [attrs for _, _, attrs in graph.edges(data=True)]
+
+            for attrs in edge_iter:
+                pts = attrs.get(EDGE_COORDINATES_KEY)
+                if pts is None:
+                    continue
+                local_vx = np.round(pts / scale).astype(np.int64) - bbox_min_vx
+                # skip edges entirely outside the chunk
+                in_chunk = np.all(local_vx >= 0, axis=1) & np.all(
+                    local_vx < chunk_shape, axis=1
+                )
+                if not np.any(in_chunk):
+                    continue
+                for i in range(len(local_vx) - 1):
+                    draw_line_segment(
+                        local_vx[i].astype(float),
+                        local_vx[i + 1].astype(float),
+                        skeleton_image,
+                    )
+
+            if skeleton_image.sum() == 0:
+                self._set_status("No skeleton voxels found in region.")
+                return
+
+            # --- 5. Build skan Skeleton and labeled skeleton image ---
+            self._set_status("Building skeleton graph…")
+
+
+            skeleton_label_image = sk_label(skeleton_image)
+            skeleton_obj = Skeleton(skeleton_image.astype(bool))
+
+            # --- 6. Run break detection ---
+            self._set_status("Detecting breaks…")
+            node_ids, source_vx, dest_vx = find_breaks_in_skeleton(
+                skeleton_obj=skeleton_obj,
+                end_point_radius=self._radius_spinbox.value(),
+                segmentation_label_image=seg_chunk,
+                skeleton_label_image=skeleton_label_image,
+                include_angles=self._use_angles_checkbox.isChecked(),
+                angle_threshold=self._angle_spinbox.value(),
+            )
+
+            if len(node_ids) == 0:
+                self._set_status("No breaks detected in this region.")
+                return
+
+            # --- 7. Convert skan local voxel coords → viewer display coords ---
+            # skan coords: local chunk indices (z, y, x)
+            # world: (z, y, x) µm = (local_vx + bbox_min_vx) * scale
+            # viewer add_points expects (x, y, z) → flip last axis
+            source_world = (source_vx + bbox_min_vx) * scale
+            dest_world = (dest_vx + bbox_min_vx) * scale
+            display_source = source_world[:, ::-1].astype(np.float32)
+            display_dest = dest_world[:, ::-1].astype(np.float32)
+
+            # --- 8. Show in viewer ---
+            point_size = max(np.max(self.viewer.data.node_coordinates) * 0.01, 50)
+            if self._source_visual is None:
+                self._source_visual, self._source_store = self.viewer.add_points(
+                    point_size=point_size
+                )
+            if self._dest_visual is None:
+                self._dest_visual, self._dest_store = self.viewer.add_points(
+                    point_size=point_size
+                )
+
+            self._source_store.coordinates = display_source
+            self._dest_store.coordinates = display_dest
+            self._source_visual.appearance.visible = True
+            self._dest_visual.appearance.visible = True
+
+            self._set_status(
+                f"Found {len(node_ids)} potential break(s). "
+                "First point cloud = endpoints, second = suggested targets."
+            )
+
+        except Exception as e:
+            import traceback
+            self._set_status(f"Error: {e}\n{traceback.format_exc()[:300]}")
+
+    def _on_clear_clicked(self) -> None:
+        if self._source_visual is not None:
+            self._source_visual.appearance.visible = False
+        if self._dest_visual is not None:
+            self._dest_visual.appearance.visible = False
+        self._set_status("")
+
+
+class ConnectedComponentsWidget(QWidget):
+    """Widget for exploring connected components of the skeleton graph.
+
+    Colors the largest component blue, a selected smaller component orange,
+    and makes everything else transparent. Buttons cycle through the top-N
+    smaller components and allow resetting or recomputing.
+
+    Parameters
+    ----------
+    viewer : SkelePlexApp
+        The SkelePlex application instance.
+    """
+
+    _MAIN_COLOR = np.array([0.0, 0.4, 1.0, 1.0], dtype=np.float32)
+    _OTHER_COLOR = np.array([1.0, 0.5, 0.0, 1.0], dtype=np.float32)
+    _HIDDEN_COLOR = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    _DEFAULT_COLOR = np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
+
+    def __init__(self, viewer) -> None:
+        super().__init__()
+        self.viewer = viewer
+        self._components: list[frozenset[int]] = []
+        self._current_idx: int = 0  # index into self._components[1:]
+
+        n_label = QLabel("Max other components to track:")
+        self._n_spinbox = QSpinBox()
+        self._n_spinbox.setMinimum(1)
+        self._n_spinbox.setMaximum(100)
+        self._n_spinbox.setValue(10)
+
+        self._recompute_button = QPushButton("Recompute components")
+        self._recompute_button.clicked.connect(self._on_recompute_clicked)
+
+        self._status_label = QLabel("Not computed yet.")
+        self._status_label.setWordWrap(True)
+
+        nav_layout = QHBoxLayout()
+        self._prev_button = QPushButton("← Previous")
+        self._prev_button.clicked.connect(self._on_prev_clicked)
+        self._next_button = QPushButton("Next →")
+        self._next_button.clicked.connect(self._on_next_clicked)
+        nav_layout.addWidget(self._prev_button)
+        nav_layout.addWidget(self._next_button)
+
+        self._reset_button = QPushButton("Reset colors")
+        self._reset_button.clicked.connect(self._on_reset_clicked)
+
+        layout = QVBoxLayout()
+        layout.addWidget(n_label)
+        layout.addWidget(self._n_spinbox)
+        layout.addWidget(self._recompute_button)
+        layout.addWidget(self._status_label)
+        layout.addLayout(nav_layout)
+        layout.addWidget(self._reset_button)
+        self.setLayout(layout)
+
+        viewer.add_auxiliary_widget(self, name="Connected Components")
+
+    def _set_status(self, msg: str) -> None:
+        self._status_label.setText(msg)
+
+    def _on_recompute_clicked(self) -> None:
+        self._set_status("Computing...")
+        try:
+            graph = self.viewer.data.skeleton_graph.graph
+            ug = graph.to_undirected() if graph.is_directed() else graph
+            n_max = self._n_spinbox.value()
+            all_components = sorted(
+                nx.connected_components(ug), key=len, reverse=True
+            )
+            # keep largest + top-N others
+            self._components = [frozenset(c) for c in all_components[: n_max + 1]]
+            self._current_idx = 0
+            n_others = len(self._components) - 1
+            self._set_status(
+                f"Found {len(all_components)} components. "
+                f"Largest: {len(self._components[0])} nodes. "
+                f"Tracking {n_others} smaller ones."
+            )
+            self._apply_colors()
+        except Exception as e:
+            self._set_status(f"Error: {e}")
+
+    def _on_prev_clicked(self) -> None:
+        if len(self._components) < 2:
+            self._set_status("Recompute first.")
+            return
+        n_others = len(self._components) - 1
+        self._current_idx = (self._current_idx - 1) % n_others
+        self._apply_colors()
+
+    def _on_next_clicked(self) -> None:
+        if len(self._components) < 2:
+            self._set_status("Recompute first.")
+            return
+        n_others = len(self._components) - 1
+        self._current_idx = (self._current_idx + 1) % n_others
+        self._apply_colors()
+
+    def _apply_colors(self) -> None:
+        if not self._components:
+            return
+        try:
+            graph = self.viewer.data.skeleton_graph.graph
+            main_nodes = self._components[0]
+            other_idx = self._current_idx + 1
+            other_nodes = (
+                self._components[other_idx]
+                if other_idx < len(self._components)
+                else frozenset()
+            )
+
+            color_dict: dict[tuple[int, int], np.ndarray] = {}
+            for u, v in graph.edges():
+                if u in main_nodes and v in main_nodes:
+                    color_dict[(u, v)] = self._MAIN_COLOR.copy()
+                elif u in other_nodes and v in other_nodes:
+                    color_dict[(u, v)] = self._OTHER_COLOR.copy()
+                else:
+                    color_dict[(u, v)] = self._HIDDEN_COLOR.copy()
+
+            self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
+                colormap=color_dict,
+                default_color=self._HIDDEN_COLOR,
+            )
+            n_others = len(self._components) - 1
+            self._set_status(
+                f"Component {self._current_idx + 1}/{n_others} "
+                f"({len(other_nodes)} nodes). "
+                f"Blue = main ({len(main_nodes)} nodes)."
+            )
+        except Exception as e:
+            self._set_status(f"Color error: {e}")
+
+    def _on_reset_clicked(self) -> None:
+        try:
+            self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
+                colormap={},
+                default_color=self._DEFAULT_COLOR,
+            )
+            self._set_status("")
+        except Exception as e:
+            self._set_status(f"Reset error: {e}")
+
+
 def make_split_edge_widget(viewer):
     """Create a widget for splitting edges in the skeleton graph."""
 
@@ -878,6 +1261,36 @@ def get_reachable_edges(
     return reachable
 
 
+def _get_terminal_edges(
+    graph: nx.Graph, reachable: set[tuple[int, int]]
+) -> set[tuple[int, int]]:
+    """Return the subset of reachable edges that have no outgoing reachable edges.
+
+    For directed graphs an edge (u, v) is terminal when v has no successors
+    that are reached via a reachable edge.  For undirected graphs an edge is
+    terminal when one of its endpoints connects only to nodes reached via the
+    same edge (i.e. it is a leaf in the reachable subgraph).
+    """
+    reachable_nodes = {u for u, v in reachable} | {v for u, v in reachable}
+    terminal: set[tuple[int, int]] = set()
+
+    if isinstance(graph, nx.DiGraph):
+        for u, v in reachable:
+            successors_in_reachable = any(
+                (v, w) in reachable for w in graph.successors(v)
+            )
+            if not successors_in_reachable:
+                terminal.add((u, v))
+    else:
+        reachable_subgraph = graph.subgraph(reachable_nodes)
+        for u, v in reachable:
+            if reachable_subgraph.degree(u) == 1 or reachable_subgraph.degree(v) == 1:
+                terminal.add((u, v))
+                terminal.add((v, u))
+
+    return terminal
+
+
 class RenderReachableEdgesWidget(QWidget):
     """Widget that highlights edges reachable from a given input edge.
 
@@ -885,8 +1298,9 @@ class RenderReachableEdgesWidget(QWidget):
     directions from the edge's target node. For undirected graphs, highlights
     all edges in the same connected component.
 
-    The input edge is shown in red, reachable edges in green, and all
-    other edges are made transparent.
+    The input edge is shown in red, terminal reachable edges (no further
+    branches) in orange, other reachable edges in blue, and all other edges
+    are made transparent.
 
     Parameters
     ----------
@@ -896,6 +1310,7 @@ class RenderReachableEdgesWidget(QWidget):
 
     _INPUT_COLOR = np.array([1.0, 0.0, 0.0, 1.0], dtype=np.float32)
     _REACHABLE_COLOR = np.array([0.3, 0.3, 0.8, 1.0], dtype=np.float32)
+    _TERMINAL_COLOR = np.array([1.0, 0.65, 0.0, 1.0], dtype=np.float32)
     _OTHER_COLOR = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float32)
     _DEFAULT_BLUE = np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
 
@@ -956,11 +1371,15 @@ class RenderReachableEdgesWidget(QWidget):
             reachable = get_reachable_edges(graph, edge, n_steps=n_steps)
             input_key = (edge[0], edge[1])
 
+            terminal = _get_terminal_edges(graph, reachable)
+
             color_dict: dict[tuple[int, int], np.ndarray] = {}
             for graph_edge in graph.edges():
                 key = (graph_edge[0], graph_edge[1])
                 if key == input_key:
                     color_dict[key] = self._INPUT_COLOR.copy()
+                elif key in terminal:
+                    color_dict[key] = self._TERMINAL_COLOR.copy()
                 elif key in reachable:
                     color_dict[key] = self._REACHABLE_COLOR.copy()
                 else:
@@ -972,7 +1391,7 @@ class RenderReachableEdgesWidget(QWidget):
             )
             self._set_status(
                 f"Highlighted {len(reachable)} reachable edges "
-                f"(input: {input_key})."
+                f"({len(terminal)} terminal, input: {input_key})."
             )
         except Exception as e:
             self._set_status(f"Error: {e}")
@@ -1112,3 +1531,4 @@ def filter_edges_by_attribute(
         default_color=np.array([0, 0, 0, 1], dtype=np.float32),
     )
     viewer.data.edge_colormap = edge_colormap
+

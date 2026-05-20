@@ -1,12 +1,14 @@
+from functools import partial
 import logging  # noqa
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Literal
 
 import networkx as nx
 import h5py
 import numpy as np
 import skimage as ski
 from skimage.morphology import dilation, disk
+from scipy.ndimage import distance_transform_edt
 import torch
 from tqdm import tqdm
 import concurrent.futures
@@ -362,7 +364,7 @@ def find_lumen_in_slice(
             label_with_lumen = label_slice.copy()
 
     label_slice = label_with_lumen
-    return label_slice 
+    return label_slice
 
 
 def lumen_touches_background(label_slice):
@@ -500,7 +502,8 @@ def fix_only_lumen(segmentation_slice):
     return bool(boundary_lumen & boundary_background)
 
 
-def add_file_to_graph(file):
+def add_file_to_graph(file ,
+                      thickness_from = "ellipse"):
     """Process a single HDF5 file."""
     try:
         with h5py.File(file, "r") as f:
@@ -561,12 +564,16 @@ def add_file_to_graph(file):
                     lumen_radius_branch.append(lumen_radius)
             else:
                 # no tissue label, full region is tissue
-                tissue_radius_branch.append(minor_axis / 2)
+                if thickness_from == "ellipse":
+                    tissue_radius_branch.append(minor_axis / 2)
+                elif thickness_from == "distance_transform":
+                    tissue_radius_branch.append(tissue_thickness_distance_transform(segmentation_slice))
                 lumen_radius_branch.append(0)
         else:
             # completely closed (no lumen)
             label_slice = ski.measure.label((segmentation_slice != 0).astype(np.uint8))
             props = ski.measure.regionprops(label_slice)
+            props = sorted(props, key=lambda r: r.area, reverse=True)
             if props:
                 minor_axis = props[0].minor_axis_length
                 major_axis = props[0].major_axis_length
@@ -574,7 +581,10 @@ def add_file_to_graph(file):
                 minor_axis_branch.append(minor_axis)
                 major_axis_branch.append(major_axis)
                 total_area_branch.append(total_area)
-                tissue_radius_branch.append(minor_axis / 2)
+                if thickness_from == "ellipse":
+                    tissue_radius_branch.append(minor_axis / 2)
+                elif thickness_from == "distance_transform":
+                    tissue_radius_branch.append(tissue_thickness_distance_transform(segmentation_slice))
                 lumen_radius_branch.append(0)
 
     lumen_diameter = np.array(lumen_radius_branch) * 2 * pixel_spacing_um
@@ -598,8 +608,37 @@ def add_file_to_graph(file):
         np.std(major_axis),
     )
 
+def tissue_thickness_distance_transform(segmentation_slice):
+    """
+    Calculate tissue thickness using distance transform.
 
-def add_measurements_from_h5_to_graph(graph_path, input_path):
+    Takes the maxium distance to the background (0) within the tissue (1).
+    Works only if there is no lumen.
+
+    Parameters
+    ----------
+    segmentation_slice : numpy.ndarray
+        2D array representing the segmentation slice, where 0 is background,
+        1 is tissue, and 2 is lumen.
+
+    Returns
+    -------
+    float
+        The maximum distance from the tissue to the background, representing
+        the tissue thickness.
+    """
+    if np.sum(segmentation_slice == 2) > 0:
+        raise ValueError(
+            "Segmentation slice contains lumen, cannot calculate tissue "
+            "thickness using distance transform."
+        )
+    tissue_mask = (segmentation_slice == 1)
+    distance_map =distance_transform_edt(tissue_mask)
+    return np.max(distance_map)
+
+def add_measurements_from_h5_to_graph(graph_path,
+                                      input_path,
+                                      thickness_from: Literal["ellipse", "distance_transform"] = "ellipse"):
     """
     Add measurements from HDF5 files to the skeleton graph.
 
@@ -659,9 +698,10 @@ def add_measurements_from_h5_to_graph(graph_path, input_path):
     files = [os.path.join(input_path, f) for f in files]
 
     # Process files in parallel
+    fn = partial(add_file_to_graph, thickness_from=thickness_from)
     results = []
     with concurrent.futures.ProcessPoolExecutor(max_workers=12) as executor:
-        for result in tqdm(executor.map(add_file_to_graph, files), total=len(files)):
+        for result in tqdm(executor.map(fn, files), total=len(files)):
             if result:
                 results.append(result)
 

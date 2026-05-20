@@ -8,6 +8,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+.claude
 env/
 build/
 develop-eggs/

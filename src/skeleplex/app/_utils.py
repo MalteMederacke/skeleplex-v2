@@ -13,7 +13,9 @@ from skeleplex.app import (
     SkeletonGraphFile,
 )
 from skeleplex.app._curate import (
+    BreakDetectionWidget,
     ChangeBranchColorWidget,
+    ConnectedComponentsWidget,
     RenderAroundNodeWidget,
     RenderReachableEdgesWidget,
     make_split_edge_widget,
@@ -103,6 +105,8 @@ def view_skeleton(
             split_edge_widget = make_split_edge_widget(viewer)
 
             ChangeBranchColorWidget(viewer)
+            ConnectedComponentsWidget(viewer)
+            BreakDetectionWidget(viewer)
 
             # add to viewer
             viewer.add_auxiliary_widget(undo_widget.native, name="Undo")

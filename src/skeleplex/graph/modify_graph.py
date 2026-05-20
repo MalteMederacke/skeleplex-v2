@@ -230,7 +230,13 @@ def length_pruning(skeleton_graph: SkeletonGraph, length_threshold: int):
         if degree != 1 or node == skeleton_graph.origin:
             continue
         if g_unmodified.is_directed():
-            edge = next(iter(g_unmodified.in_edges(node)))
+            in_e = list(g_unmodified.in_edges(node))
+            out_e = list(g_unmodified.out_edges(node))
+            # degree-1 in a digraph: leaf has in_edge only, source has out_edge only
+            edges = in_e or out_e
+            if not edges:
+                continue
+            edge = edges[0]
         else:
             edge = next(iter(g_unmodified.edges(node)))
         path_length = _get_edge_data(g_unmodified, edge[0], edge[1]).get(LENGTH_KEY)
@@ -326,52 +332,103 @@ def length_pruning(skeleton_graph: SkeletonGraph, length_threshold: int):
     logger.info(f"Pruned {len(edges_to_delete)} short leaf edges.")
 
 
-def prune_degree_2_nodes(skeleton_graph: SkeletonGraph):
+def prune_degree_2_nodes(skeleton_graph: SkeletonGraph,
+                         do_all = True):
     """Remove all degree-2 nodes by merging their incoming and outgoing edges.
+
+    Uses the same parallel batch strategy as length_pruning: independent
+    merges (disjoint node sets) are computed in parallel threads and applied
+    in a single graph copy; dependent merges fall back to sequential.
+
+    Chains of consecutive degree-2 nodes in the original graph are handled
+    correctly for isolated pairs but may require multiple calls to fully
+    resolve long chains.
 
     Parameters
     ----------
     skeleton_graph : SkeletonGraph
         The graph to prune.
-
+    do_all : bool
+        If True, also prune dependent degree-2 nodes that share edges with other
+        merges. This may lead to non-deterministic results and is not
+        recommended. Default is True for maximum pruning aggressiveness.
     """
-    graph = skeleton_graph.graph.copy()
+    graph = skeleton_graph.graph
     origin = skeleton_graph.origin
 
-    nodes_to_merge = []
+    # --- Pass 1: collect all (n1, v, n2) triples (read-only) ---
+    merge_ops = []
     for node in graph.nodes:
         if node == origin:
             continue
-        if graph.degree(node) == 2:
-            if graph.is_directed():
-                in_edges = list(graph.in_edges(node))
-                out_edges = list(graph.out_edges(node))
-                if len(in_edges) == 1 and len(out_edges) == 1:
-                    u = in_edges[0][0]
-                    w = out_edges[0][1]
-                    nodes_to_merge.append((u, node, w))
-            else:
-                neighbors = list(graph.neighbors(node))
-                if len(neighbors) == 2:
-                    nodes_to_merge.append((neighbors[0], node, neighbors[1]))
+        if graph.degree(node) != 2:
+            continue
+        if graph.is_directed():
+            in_e = list(graph.in_edges(node))
+            out_e = list(graph.out_edges(node))
+            if len(in_e) == 1 and len(out_e) == 1:
+                merge_ops.append((in_e[0][0], node, out_e[0][1]))
+        else:
+            nb = list(graph.neighbors(node))
+            if len(nb) == 2:
+                merge_ops.append((nb[0], node, nb[1]))
 
-    logger.info(f"Found {len(nodes_to_merge)} degree-2 nodes to merge.")
+    if not merge_ops:
+        return
 
-    for u, v, w in nodes_to_merge:
-        try:
-            merge_edge(skeleton_graph, u, v, w)  # just calling, not assigning
-            logger.info(f"Merged node {v} between {u} and {w}")
-        except Exception as e:
-            logger.warning(f"Could not merge node {v} between {u} and {w}: {e}")
+    logger.info(f"Found {len(merge_ops)} degree-2 nodes to merge.")
 
-    # reload graph because merge_edge modifies skeleton_graph.graph
-    graph = skeleton_graph.graph
+    # --- Partition into independent (disjoint node sets) and dependent ---
+    independent, dependent = [], []
+    claimed = set()
+    for n1, v, n2 in merge_ops:
+        involved = {n1, v, n2}
+        if involved.isdisjoint(claimed):
+            independent.append((n1, v, n2))
+            claimed |= involved
+        else:
+            dependent.append((n1, v, n2))
 
-    # remove any isolates
-    graph.remove_nodes_from(list(nx.isolates(graph)))
+    # --- Independent: compute attributes in parallel, apply in one copy ---
+    if independent:
+        graph_snapshot = skeleton_graph.graph
 
-    # save updated graph back
-    skeleton_graph.graph = graph
+        def _compute(args):
+            try:
+                return _compute_merge_attributes(graph_snapshot, *args)
+            except Exception as e:
+                logger.warning(f"Could not compute merge for {args}: {e}")
+                return None
+
+        with ThreadPoolExecutor(max_workers=os.cpu_count()) as pool:
+            results = list(tqdm(
+                pool.map(_compute, independent),
+                total=len(independent),
+                desc="Merging degree-2 nodes (parallel)",
+            ))
+
+        working = skeleton_graph.graph.copy()
+        for res in results:
+            if res is None:
+                continue
+            new_edge, edge1, edge2, mid, attrs = res
+            if working.has_node(mid):
+                working.remove_edge(*edge1)
+                working.remove_edge(*edge2)
+                working.remove_node(mid)
+                working.add_edge(*new_edge, **attrs)
+        skeleton_graph.graph = working
+
+    # --- Dependent: sequential fallback ---
+    if do_all:
+        for n1, v, n2 in tqdm(dependent, desc="Merging degree-2 nodes (sequential)"):
+            try:
+                merge_edge(skeleton_graph, n1, v, n2)
+            except Exception as e:
+                logger.warning(f"Could not merge node {v} between {n1} and {n2}: {e}")
+
+    skeleton_graph.graph.remove_nodes_from(list(nx.isolates(skeleton_graph.graph)))
+    logger.info(f"Merged {len(merge_ops)} degree-2 nodes.")
 
 
 def split_edge(
