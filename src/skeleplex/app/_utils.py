@@ -79,8 +79,13 @@ def view_skeleton(
     viewer = SkelePlexApp(data=data_manager)
     viewer.show()
 
-    # Wait a short time for things to load and then look at the skeleton
-    # this is a hack...do something smarter later
+    # The scene is first built and resliced during SkelePlexApp construction —
+    # before the asyncio loop exists — so cellier's async slicer produces no
+    # render buffers then. Reslice once the loop is running (this singleShot
+    # fires inside the running loop), then frame the skeleton.
+    # look_at_skeleton subscribes a one-shot fit to on_reslice_completed and then
+    # reslices, so the camera frames the geometry once it is uploaded. Run it via
+    # singleShot so it fires inside the running event loop.
     timer = QTimer()
     timer.singleShot(100, viewer.look_at_skeleton)
 
@@ -94,7 +99,7 @@ def view_skeleton(
             delete_edge_widget = magicgui(
                 viewer.curate.delete_edge,
             )
-            render_around_node_widget = RenderAroundNodeWidget(viewer)
+            _ = RenderAroundNodeWidget(viewer)
 
             connect_without_merging_widget = magicgui(
                 viewer.curate.connect_without_merging,
@@ -158,13 +163,28 @@ def should_launch_ipython_event_loop() -> bool:
 
 
 def run():
-    """Start the Qt application event loop.
+    """Start the integrated Qt + asyncio event loop and block until close.
 
-    This is meant to be used in a script.
-    This should be called after the viewer is set up.
+    This is meant to be used in a script, after the viewer is set up.
+
+    cellier v2 schedules asyncio tasks from within Qt callbacks — the async
+    slicer (``asyncio.ensure_future``) on every reslice and the camera-settle
+    debounce (``asyncio.create_task``) on every camera move. A plain
+    ``QApplication.exec()`` runs only the Qt loop, so those calls raise
+    ``RuntimeError: no running event loop``. Running via ``QtAsyncio`` drives Qt
+    and asyncio together, mirroring cellier's own launcher.
     """
-    # get the qapplication instance
+    import asyncio
+
+    import PySide6.QtAsyncio as QtAsyncio
+
+    # ensure a QApplication exists before starting the integrated loop
     qapp = QApplication.instance() or QApplication([])
 
-    # start the Qt application event loop
-    qapp.exec_()
+    async def _idle_until_quit() -> None:
+        # keep the asyncio loop alive until the Qt app quits
+        close_event = asyncio.Event()
+        qapp.aboutToQuit.connect(close_event.set)
+        await close_event.wait()
+
+    QtAsyncio.run(_idle_until_quit(), handle_sigint=True)

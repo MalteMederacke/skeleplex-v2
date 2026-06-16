@@ -1,8 +1,8 @@
 """Example script of launching the viewer and adding points to it."""
 
 import numpy as np
-from cellier.models.data_stores import PointsMemoryStore
-from cellier.models.visuals import PointsUniformAppearance, PointsVisual
+from cellier.data.points import PointsMemoryStore
+from cellier.visuals import PointsMarkerAppearance
 from magicgui import magicgui
 
 import skeleplex
@@ -26,27 +26,17 @@ def add_points_to_viewer():
         dtype=np.float32,
     )
 
-    # make the data store for the points
-    new_points_store = PointsMemoryStore(
-        coordinates=point_coordinates,
-    )
-
-    # set up the points appearance
-    points_appearance = PointsUniformAppearance(
-        size=50, color=(0, 1, 0, 1), size_coordinate_space="data"
-    )
-
-    # make the highlight points model
-    points_visual = PointsVisual(
-        name="node_highlight_points",
-        data_store_id=new_points_store.id,
-        appearance=points_appearance,
-    )
+    # make the data store for the points (zyx; cellier reverses internally)
+    new_points_store = PointsMemoryStore(positions=point_coordinates)
 
     # add the data and visual to the viewer backend (cellier)
-    viewer._viewer._backend.add_data_store(data_store=new_points_store)
-    viewer._viewer._backend.add_visual(
-        visual_model=points_visual, scene_id=viewer._viewer._main_canvas.scene_id
+    points_visual = viewer._viewer._backend.add_points(
+        data=new_points_store,
+        scene_id=viewer._viewer._scene_id,
+        appearance=PointsMarkerAppearance(
+            size=50, color=(0, 1, 0, 1), size_space="world", color_mode="uniform"
+        ),
+        name="node_highlight_points",
     )
 
     # reslice the viewer to update the display
@@ -67,7 +57,7 @@ def update_points():
     new_point_coordinates = np.random.uniform(0, 5000, (100, 3)).astype(np.float32)
 
     # set the new coordinates in the points store
-    points_store.coordinates = new_point_coordinates
+    points_store.positions = new_point_coordinates
 
     # set the points visibility to True
     points_visual.appearance.visible = True
