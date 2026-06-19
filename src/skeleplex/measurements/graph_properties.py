@@ -42,6 +42,11 @@ def get_all_graph_properties(graph, **kwargs):
 
     Each property must accept a graph, and may accept additional keyword arguments.
     Returns a list of (name, graph_out, extra_return_values).
+
+    Required kwargs:
+    - prefix: str, prefix to use for edge IDs in assign_edge_ids.
+    - approx: bool, whether to use approximate curvature computation in compute_branch_curvature.
+    - origin: int, the origin node for compute_level.
     """
     results = []
     g = graph

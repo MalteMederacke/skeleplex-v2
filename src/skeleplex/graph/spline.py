@@ -224,12 +224,19 @@ class B3Spline:
         moving_frame = self.moving_frame(
             positions=positions, method=moving_frame_method
         )
-
-        # generate the grid of points for sampling the image
-        # (shape (w, h, 3))
-        sampling_grid_um = generate_2d_grid(
-            grid_shape=grid_shape_um, grid_spacing=grid_spacing_um
+        grid_shape_vx = (
+            int(grid_shape_um[0] / grid_spacing_um[0]),
+            int(grid_shape_um[1] / grid_spacing_um[1]),
         )
+        sampling_grid_um = generate_2d_grid(
+            grid_shape=grid_shape_vx, grid_spacing=grid_spacing_um
+        )
+
+        # # generate the grid of points for sampling the image
+        # # (shape (w, h, 3))
+        # sampling_grid_um = generate_2d_grid(
+        #     grid_shape=grid_shape_um, grid_spacing=grid_spacing_um
+        # )
 
         # reshape the sampling grid to be a list of coordinates
         grid_coords_um = sampling_grid_um.reshape(-1, 3)
