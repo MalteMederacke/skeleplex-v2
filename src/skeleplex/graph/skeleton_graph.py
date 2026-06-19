@@ -867,13 +867,15 @@ class SkeletonGraph:
 
         # Pre-extract (u, v, spline) triples so only the needed spline is
         # pickled per task instead of the full spline_dict
+        filter_by_generation = max_generation is not None or min_generation is not None
         edge_triples = []
         for u, v in nx.breadth_first_search.bfs_edges(self.graph, source=origin):
-            gen = _get_generation(u, v)
-            if (max_generation is not None and gen > max_generation) or (
-                min_generation is not None and gen <= min_generation
-            ):
-                continue
+            if filter_by_generation:
+                gen = _get_generation(u, v)
+                if (max_generation is not None and gen > max_generation) or (
+                    min_generation is not None and gen <= min_generation
+                ):
+                    continue
             spline = spline_dict.get((u, v)) or spline_dict.get((v, u))
             edge_triples.append((u, v, spline))
 
