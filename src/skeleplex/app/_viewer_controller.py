@@ -21,6 +21,11 @@ from cellier.visuals import (
 
 from skeleplex.app.cellier.utils import make_controller
 
+#: Default opacity for the rendered segmentation labels. Rendered semi-transparent
+#: so the skeleton lines drawn underneath remain visible. Kept in sync with the
+#: initial value of the opacity slider in the Qt controls.
+DEFAULT_SEGMENTATION_OPACITY: float = 0.3
+
 
 @dataclass
 class RenderedSkeletonComponents:
@@ -277,9 +282,36 @@ class MainCanvasController:
             self._segmentation.visual = self._backend.add_labels(
                 data=self._segmentation.data_store,
                 scene_id=self._scene_id,
-                appearance=InMemoryLabelsAppearance(),
+                # Render the labels semi-transparently so the skeleton lines
+                # drawn underneath remain visible. weighted_blend is
+                # order-independent (OIT) and depth_write is disabled so the
+                # translucent surface does not occlude the lines behind it.
+                # render_order is raised above the skeleton visuals (default 0)
+                # so the translucent labels always composite last, instead of
+                # being distance-sorted against the other visuals — this avoids
+                # the composite-order "pop" when orbiting the camera.
+                #
+                # opacity is intentionally left at the default (1.0) here and
+                # applied via update_appearance_field below — see the workaround
+                # note for why.
+                appearance=InMemoryLabelsAppearance(
+                    transparency_mode="weighted_blend",
+                    depth_write=False,
+                    render_order=2,
+                ),
                 name="labels_node",
                 transform=resolved_transform,
+            )
+            # Workaround for a cellier bug: the 3D label volume material is
+            # constructed without applying appearance.opacity (only the 2D image
+            # material honors it at construction), so the volume renders fully
+            # opaque until an opacity appearance event fires. The appearance is
+            # an evented model that suppresses no-op sets, so we must set a value
+            # that differs from the constructed one to actually fire the event —
+            # hence constructing at the default 1.0 above and changing it here.
+            # Remove once cellier applies opacity at construction.
+            self._backend.update_appearance_field(
+                self._segmentation.visual.id, "opacity", DEFAULT_SEGMENTATION_OPACITY
             )
         else:
             # the visual may have been hidden by a prior None update; ensure it
@@ -302,6 +334,21 @@ class MainCanvasController:
 
         # reslice the scene
         self._backend.reslice_scene(self._scene_id)
+
+    def set_segmentation_opacity(self, opacity: float) -> None:
+        """Set the opacity of the rendered segmentation labels.
+
+        Parameters
+        ----------
+        opacity : float
+            The opacity in the range [0, 1]. 0 is fully transparent, 1 is
+            fully opaque. Has no effect if no segmentation has been rendered.
+        """
+        if self._segmentation.visual is None:
+            return
+        self._backend.update_appearance_field(
+            self._segmentation.visual.id, "opacity", float(opacity)
+        )
 
     def look_at_skeleton(
         self,

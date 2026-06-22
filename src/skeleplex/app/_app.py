@@ -106,6 +106,10 @@ class SkelePlexApp(Application):
             transform=self.data.segmentation_view.transform,
         )
 
+    def set_segmentation_opacity(self, opacity: float) -> None:
+        """Set the opacity of the rendered segmentation in the main viewer."""
+        self._viewer.main_canvas.set_segmentation_opacity(opacity)
+
     def look_at_skeleton(self) -> None:
         """Set the camera in the main viewer to look at the skeleton."""
         self._viewer.main_canvas.look_at_skeleton()
@@ -261,6 +265,11 @@ class SkelePlexApp(Application):
         # event for updating the segmentation view when the render button is pressed
         self._main_window.app_controls.widget().segmentation_view_box.view_requested.connect(
             self.data.segmentation_view._on_view_request
+        )
+
+        # event for updating the segmentation opacity when the slider is moved
+        self._main_window.app_controls.widget().segmentation_view_box.opacity_changed.connect(
+            self.set_segmentation_opacity
         )
 
         # event for updating the main viewer skeleton when the data view is updated
