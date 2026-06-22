@@ -239,13 +239,24 @@ class MainCanvasController:
         ----------
         image : np.ndarray | None
             The segmentation image to render, in array (z, y, x) order.
-            If None, the segmentation image will not be updated.
+            If None, the segmentation is hidden (e.g. "None" view mode). An
+            already-rendered visual is hidden rather than removed so it can be
+            shown again on the next non-None update.
         transform : np.ndarray | None
             The 4x4 affine transform to apply to the segmentation image, in
             data (z, y, x) axis order. cellier reverses to pygfx order
             internally.
         """
         if image is None:
+            # nothing has ever been rendered, so there is nothing to hide
+            if self._segmentation.visual is None:
+                return
+
+            # hide the existing visual and reslice so the change is shown
+            self._backend.set_visual_visible(
+                self._segmentation.visual.id, visible=False
+            )
+            self._backend.reslice_scene(self._scene_id)
             return
 
         # make / update the segmentation data store (int32 required by cellier)
@@ -271,6 +282,10 @@ class MainCanvasController:
                 transform=resolved_transform,
             )
         else:
+            # the visual may have been hidden by a prior None update; ensure it
+            # is visible again now that there is data to show.
+            self._backend.set_visual_visible(self._segmentation.visual.id, visible=True)
+
             # transform is an evented field on the live model; assignment fires
             # the psygnal event the controller wired, which reslices the scene.
             self._segmentation.visual.transform = resolved_transform
