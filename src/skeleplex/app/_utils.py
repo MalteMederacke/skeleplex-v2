@@ -134,7 +134,7 @@ def view_skeleton(
 # is smoother than any monitor refresh; only Qt input/repaint latency is bounded
 # by this. cellier's I/O and asyncio tasks are event-driven on the kernel loop's
 # selector and are NOT throttled by this interval.
-_QT_PUMP_INTERVAL_S = 0.005
+_QT_PUMP_INTERVAL_S = 0.003
 
 
 def start_qt_loop_ipython() -> None:
