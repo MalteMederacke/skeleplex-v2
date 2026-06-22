@@ -130,11 +130,9 @@ def view_skeleton(
         return viewer
 
 
-# GUI servicing cadence for the Jupyter pump (seconds). ~5 ms ≈ 200 Hz, which
-# is smoother than any monitor refresh; only Qt input/repaint latency is bounded
-# by this. cellier's I/O and asyncio tasks are event-driven on the kernel loop's
-# selector and are NOT throttled by this interval.
-_QT_PUMP_INTERVAL_S = 0.003
+# Period for updating the Qt components in seconds
+# The async slicing, etc. in cellier are not gated by this interval
+_QT_UPDATE_INTERVAL_S = 0.003
 
 
 def start_qt_loop_ipython() -> None:
@@ -148,15 +146,12 @@ def start_qt_loop_ipython() -> None:
     blank until the next cell wakes the kernel.
 
     Instead of enabling the stock integration, we keep the kernel's own loop in
-    charge and schedule a lightweight pump coroutine on it that calls
-    ``QApplication.processEvents`` every :data:`_QT_PUMP_INTERVAL_S` seconds.
+    charge and schedule a lightweight  coroutine on it that calls
+    ``QApplication.processEvents`` every :data:`_QT_UPDATE_INTERVAL_S` seconds.
     The loop is therefore never parked: cellier's tasks (bound to this same
     loop) keep stepping and Qt stays responsive. Crucially, the interval only
     bounds Qt input/repaint latency — asyncio I/O is serviced by the loop's
-    selector the moment it is ready, independent of the pump.
-
-    Idempotent: re-running ``view_skeleton`` in the same kernel reuses the
-    existing pump rather than starting a second one.
+    selector the moment it is ready, independent of the Qt update interval.
 
     Works for both the Jupyter kernel and the IPython console.
     """
@@ -176,7 +171,7 @@ def start_qt_loop_ipython() -> None:
             except Exception:
                 # keep the pump alive across any transient Qt event error
                 pass
-            await asyncio.sleep(_QT_PUMP_INTERVAL_S)
+            await asyncio.sleep(_QT_UPDATE_INTERVAL_S)
 
     # Scheduled on the kernel's running loop (this runs during cell execution),
     # so the pump and cellier's tasks share that single, never-parked loop.
@@ -210,13 +205,9 @@ def run():
 
     This is meant to be used in a script, after the viewer is set up.
 
-    cellier v2 schedules asyncio tasks from within Qt callbacks — the async
-    slicer (``asyncio.ensure_future``) on every reslice and the camera-settle
-    debounce (``asyncio.create_task``) on every camera move. A plain
-    ``QApplication.exec()`` runs only the Qt loop, so those calls raise
-    ``RuntimeError: no running event loop``. ``qasync.QEventLoop`` is an
-    asyncio loop backed by Qt, so Qt events and cellier's slicer tasks share
-    a single loop.
+    cellier uses asyncio for slicing. Thus, it needs the asyncio event loop
+    in addition to the Qt loop. This uses qasync to integrate the
+    asyncio events into the Qt loop.
     """
     import asyncio
 
