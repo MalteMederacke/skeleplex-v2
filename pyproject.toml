@@ -59,7 +59,11 @@ dependencies = [
 [project.optional-dependencies]
 # for visualization
 napari = ["napari[pyside6,optional]"]
-cellier = ["cellier[pyside]>=0.0.23", "wgpu>=0.31.0"]
+cellier = [
+    "cellier[pyside]>=0.0.23",
+    "wgpu>=0.31.0",
+    "qasync>=0.28.0",
+]
 viz = ["app-model", "magicgui", "IPython"]
 torch = ["torch", "morphospaces>=0.0.5"]
 cupy = ["cupy-cuda12x"]
