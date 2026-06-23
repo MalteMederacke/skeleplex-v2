@@ -2,9 +2,8 @@
 
 from app_model import Application
 from app_model.backends.qt import QModelMainWindow
-from PyQt6.QtWidgets import QDockWidget
 from qtpy.QtCore import Qt
-from qtpy.QtWidgets import QStatusBar, QWidget
+from qtpy.QtWidgets import QDockWidget, QStatusBar, QWidget
 
 from skeleplex.app.qt import AppControlsDock, AuxiliaryViews
 from skeleplex.app.qt.main_viewer import MainViewerWidget
@@ -53,11 +52,17 @@ class MainWindow(QModelMainWindow):
         # create the status bar at the bottom of the window
         self._create_status_bar()
 
-    def add_auxiliary_widget(self, widget: QWidget, name: str = "", area: str = "right"):
+    def add_auxiliary_widget(
+        self, widget: QWidget, name: str = "", area: str = "right"
+    ):
         """Add a widget to the auxiliary views dock."""
         dock_widget = QDockWidget(name)
         dock_widget.setWidget(widget)
-        dock_area = Qt.DockWidgetArea.LeftDockWidgetArea if area == "left" else Qt.DockWidgetArea.RightDockWidgetArea
+        dock_area = (
+            Qt.DockWidgetArea.LeftDockWidgetArea
+            if area == "left"
+            else Qt.DockWidgetArea.RightDockWidgetArea
+        )
         self.addDockWidget(dock_area, dock_widget)
 
     def _create_app_controls(self):

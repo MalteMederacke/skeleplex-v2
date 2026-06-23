@@ -5,8 +5,8 @@ import logging
 import numpy as np
 from app_model import Application
 from app_model.types import Action, KeyBindingRule, KeyCode, KeyMod, MenuRule
-from cellier.models.data_stores import PointsMemoryStore
-from cellier.models.visuals import PointsUniformAppearance, PointsVisual
+from cellier.data.points import PointsMemoryStore
+from cellier.visuals import PointsMarkerAppearance, PointsVisual
 
 from skeleplex.app._constants import CommandId, MenuId
 from skeleplex.app._curate import CurationManager
@@ -55,14 +55,11 @@ class SkelePlexApp(Application):
         # This will build a menu bar based on these menus
         self._main_window.setModelMenuBar([MenuId.FILE, MenuId.EDIT, MenuId.DATA])
 
-        # populate the renderer
-        self._viewer._populate_viewer_from_model(
-            canvas_widget_parent=self._main_window._main_viewer_widget.main_viewer_frame
+        # create the render canvas now that the parent widget exists
+        widget = self._viewer.create_main_canvas(
+            parent=self._main_window._main_viewer_widget.main_viewer_frame
         )
-
-        for canvas in self._viewer._backend._canvas_widgets.values():
-            # add the canvas widgets
-            self._main_window._set_main_viewer_widget(canvas)
+        self._main_window._set_main_viewer_widget(widget)
 
         # connect the data events
         self._connect_data_events()
@@ -108,6 +105,10 @@ class SkelePlexApp(Application):
             image=self.data.segmentation_view.array,
             transform=self.data.segmentation_view.transform,
         )
+
+    def set_segmentation_opacity(self, opacity: float) -> None:
+        """Set the opacity of the rendered segmentation in the main viewer."""
+        self._viewer.main_canvas.set_segmentation_opacity(opacity)
 
     def look_at_skeleton(self) -> None:
         """Set the camera in the main viewer to look at the skeleton."""
@@ -189,7 +190,9 @@ class SkelePlexApp(Application):
                 id=CommandId.LOOK_AT_SKELETON,
                 title="Look at skeleton",
                 icon="fa6-solid:house",
-                callback=self._viewer.main_canvas.look_at_skeleton,
+                # use the app's lazy wrapper: _register_data_actions runs before
+                # create_main_canvas, so main_canvas is not yet available here.
+                callback=self.look_at_skeleton,
                 menus=[MenuRule(id=MenuId.DATA)],
             )
         )
@@ -262,6 +265,11 @@ class SkelePlexApp(Application):
         # event for updating the segmentation view when the render button is pressed
         self._main_window.app_controls.widget().segmentation_view_box.view_requested.connect(
             self.data.segmentation_view._on_view_request
+        )
+
+        # event for updating the segmentation opacity when the slider is moved
+        self._main_window.app_controls.widget().segmentation_view_box.opacity_changed.connect(
+            self.set_segmentation_opacity
         )
 
         # event for updating the main viewer skeleton when the data view is updated
@@ -393,7 +401,7 @@ class SkelePlexApp(Application):
             )
 
     def add_points(
-        self, point_coordinates: np.ndarray | None = None, point_size = 50
+        self, point_coordinates: np.ndarray | None = None, point_size=50
     ) -> tuple[PointsVisual, PointsMemoryStore]:
         """Add points to the viewer.
 
@@ -417,27 +425,20 @@ class SkelePlexApp(Application):
         else:
             point_coordinates = np.asarray(point_coordinates, dtype=np.float32)
 
-        # make the data store for the points
-        new_points_store = PointsMemoryStore(
-            coordinates=point_coordinates,
-        )
-
-        # set up the points appearance
-        points_appearance = PointsUniformAppearance(
-            size=point_size, color=(0, 1, 0, 1), size_coordinate_space="data"
-        )
-
-        # make the highlight points model
-        points_visual = PointsVisual(
-            name="node_highlight_points",
-            data_store_id=new_points_store.id,
-            appearance=points_appearance,
-        )
+        # make the data store for the points (zyx; cellier reverses internally)
+        new_points_store = PointsMemoryStore(positions=point_coordinates)
 
         # add the data and visual to the viewer backend (cellier)
-        self._viewer._backend.add_data_store(data_store=new_points_store)
-        self._viewer._backend.add_visual(
-            visual_model=points_visual, scene_id=self._viewer._main_canvas.scene_id
+        points_visual = self._viewer._backend.add_points(
+            data=new_points_store,
+            scene_id=self._viewer._scene_id,
+            appearance=PointsMarkerAppearance(
+                size=point_size,
+                color=(0, 1, 0, 1),
+                size_space="world",
+                color_mode="uniform",
+            ),
+            name="node_highlight_points",
         )
 
         # reslice the viewer to update the display

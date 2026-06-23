@@ -257,7 +257,9 @@ class CurationManager:
 
         # delete the edge from the skeleton graph
         for edge in edges:
-            delete_edge(skeleton_graph=self._data.skeleton_graph, edge=edge, force=force)
+            delete_edge(
+                skeleton_graph=self._data.skeleton_graph, edge=edge, force=force
+            )
 
         if redraw:
             # redraw the graph
@@ -472,7 +474,7 @@ class CurationManager:
 
 
 class RenderAroundNodeWidget(QWidget):
-    """Widget for rendering around a node and pruning short edges in the bounding box."""
+    """Widget for rendering around a node and pruning edges in the bounding box."""
 
     def __init__(self, viewer) -> None:
         super().__init__()
@@ -709,9 +711,9 @@ class BreakDetectionWidget(QWidget):
             scale = np.array(self.viewer.data.segmentation_scale)  # (z, y, x) µm/vx
             seg_shape = np.array(segmentation.shape)
 
-            bbox_min_vx = np.maximum(
-                np.round(bbox_min_world / scale), 0
-            ).astype(np.int64)
+            bbox_min_vx = np.maximum(np.round(bbox_min_world / scale), 0).astype(
+                np.int64
+            )
             bbox_max_vx = np.minimum(
                 np.round(bbox_max_world / scale), seg_shape
             ).astype(np.int64)
@@ -736,8 +738,7 @@ class BreakDetectionWidget(QWidget):
 
             if graph.is_multigraph():
                 edge_iter = [
-                    attrs
-                    for _, _, attrs in graph.edges(data=True, keys=False)
+                    attrs for _, _, attrs in graph.edges(data=True, keys=False)
                 ]
             else:
                 edge_iter = [attrs for _, _, attrs in graph.edges(data=True)]
@@ -767,7 +768,6 @@ class BreakDetectionWidget(QWidget):
             # --- 5. Build skan Skeleton and labeled skeleton image ---
             self._set_status("Building skeleton graph…")
 
-
             skeleton_label_image = sk_label(skeleton_image)
             skeleton_obj = Skeleton(skeleton_image.astype(bool))
 
@@ -789,11 +789,11 @@ class BreakDetectionWidget(QWidget):
             # --- 7. Convert skan local voxel coords → viewer display coords ---
             # skan coords: local chunk indices (z, y, x)
             # world: (z, y, x) µm = (local_vx + bbox_min_vx) * scale
-            # viewer add_points expects (x, y, z) → flip last axis
+            # raw zyx; cellier reverses to (x, y, z) internally
             source_world = (source_vx + bbox_min_vx) * scale
             dest_world = (dest_vx + bbox_min_vx) * scale
-            display_source = source_world[:, ::-1].astype(np.float32)
-            display_dest = dest_world[:, ::-1].astype(np.float32)
+            display_source = source_world.astype(np.float32)
+            display_dest = dest_world.astype(np.float32)
 
             # --- 8. Show in viewer ---
             point_size = max(np.max(self.viewer.data.node_coordinates) * 0.01, 50)
@@ -806,8 +806,8 @@ class BreakDetectionWidget(QWidget):
                     point_size=point_size
                 )
 
-            self._source_store.coordinates = display_source
-            self._dest_store.coordinates = display_dest
+            self._source_store.positions = display_source
+            self._dest_store.positions = display_dest
             self._source_visual.appearance.visible = True
             self._dest_visual.appearance.visible = True
 
@@ -818,6 +818,7 @@ class BreakDetectionWidget(QWidget):
 
         except Exception as e:
             import traceback
+
             self._set_status(f"Error: {e}\n{traceback.format_exc()[:300]}")
 
     def _on_clear_clicked(self) -> None:
@@ -895,9 +896,7 @@ class ConnectedComponentsWidget(QWidget):
             graph = self.viewer.data.skeleton_graph.graph
             ug = graph.to_undirected() if graph.is_directed() else graph
             n_max = self._n_spinbox.value()
-            all_components = sorted(
-                nx.connected_components(ug), key=len, reverse=True
-            )
+            all_components = sorted(nx.connected_components(ug), key=len, reverse=True)
             # keep largest + top-N others
             self._components = [frozenset(c) for c in all_components[: n_max + 1]]
             self._current_idx = 0
@@ -1020,8 +1019,8 @@ def make_split_edge_widget(viewer):
         spline = viewer.data.skeleton_graph.graph.edges[edge_key][EDGE_SPLINE_KEY]
         point_pos = spline.eval(split_edge_widget.split_pos.value)
 
-        split_edge_widget.point_store.coordinates = np.array(
-            [point_pos[::-1]], dtype=np.float32
+        split_edge_widget.point_store.positions = np.array(
+            [point_pos], dtype=np.float32
         )
         split_edge_widget.point_visual.appearance.visible = True
         viewer._viewer._backend.reslice_all()
@@ -1030,7 +1029,7 @@ def make_split_edge_widget(viewer):
     point_size = np.max((np.max(viewer.data.node_coordinates) * 0.01, 50))
     split_edge_widget.point_visual, split_edge_widget.point_store = viewer.add_points(
         point_size=point_size
-        )
+    )
     split_edge_widget.point_visual.appearance.visible = False
 
     return split_edge_widget
@@ -1136,7 +1135,7 @@ class ChangeBranchColorWidget(QWidget):
             if isinstance(value, numbers.Number) and not np.isnan(value)
         ]
         if not values:
-            return 0,0
+            return 0, 0
         return min(values), max(values)
 
     def _on_run_clicked(self):
@@ -1254,9 +1253,7 @@ def get_reachable_edges(
             nodes_v.add(v)
             nearby_nodes = nodes_u | nodes_v
         subgraph = graph.subgraph(nearby_nodes)
-        reachable = {(a, b) for a, b in subgraph.edges()} | {
-            (b, a) for a, b in subgraph.edges()
-        }
+        reachable = set(subgraph.edges()) | {(b, a) for a, b in subgraph.edges()}
 
     return reachable
 
@@ -1739,4 +1736,3 @@ def filter_edges_by_attribute(
         default_color=np.array([0, 0, 0, 1], dtype=np.float32),
     )
     viewer.data.edge_colormap = edge_colormap
-

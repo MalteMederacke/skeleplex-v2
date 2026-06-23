@@ -80,8 +80,12 @@ def view_skeleton(
     viewer = SkelePlexApp(data=data_manager)
     viewer.show()
 
-    # Wait a short time for things to load and then look at the skeleton
-    # this is a hack...do something smarter later
+    # The scene is built and resliced during SkelePlexApp construction, before
+    # the event loop is driving, so cellier's async slicer produces no buffers
+    # then. Once the loop is running (script: run() via qasync; Jupyter: the
+    # kernel's own asyncio loop via start_qt_loop_ipython()), this singleShot
+    # fires inside a live asyncio loop, so look_at_skeleton's one-shot
+    # fit-on-reslice runs and frames the geometry.
     timer = QTimer()
     timer.singleShot(100, viewer.look_at_skeleton)
 
@@ -95,7 +99,7 @@ def view_skeleton(
             delete_edge_widget = magicgui(
                 viewer.curate.delete_edge,
             )
-            render_around_node_widget = RenderAroundNodeWidget(viewer)
+            _ = RenderAroundNodeWidget(viewer)
 
             connect_without_merging_widget = magicgui(
                 viewer.curate.connect_without_merging,
@@ -128,21 +132,60 @@ def view_skeleton(
         return viewer
 
 
-def start_qt_loop_ipython():
-    """Start the Qt event loop in an IPython environment.
+# Period for updating the Qt components in seconds
+# The async slicing, etc. in cellier are not gated by this interval
+_QT_UPDATE_INTERVAL_S = 0.003
 
-    This works for both jupyter and ipython console environments.
+
+def start_qt_loop_ipython() -> None:
+    """Integrate Qt with the event loop in an IPython/Jupyter environment.
+
+    The Jupyter kernel already runs an asyncio loop on the main thread, but
+    ipykernel's stock ``enable_gui("qt")`` integration *parks* that loop while
+    the kernel is idle and runs Qt's own event loop instead. cellier schedules
+    its slice/render coroutines with ``asyncio.ensure_future`` / ``create_task``
+    from Qt callbacks; on the parked loop those never step, so the canvas stays
+    blank until the next cell wakes the kernel.
+
+    Instead of enabling the stock integration, we keep the kernel's own loop in
+    charge and schedule a lightweight  coroutine on it that calls
+    ``QApplication.processEvents`` every :data:`_QT_UPDATE_INTERVAL_S` seconds.
+    The loop is therefore never parked: cellier's tasks (bound to this same
+    loop) keep stepping and Qt stays responsive. Crucially, the interval only
+    bounds Qt input/repaint latency — asyncio I/O is serviced by the loop's
+    selector the moment it is ready, independent of the Qt update interval.
+
+    Works for both the Jupyter kernel and the IPython console.
     """
-    ipython = get_ipython()
-    ipython.enable_gui("qt")
+    import asyncio
+
+    qapp = QApplication.instance() or QApplication([])
+
+    existing = getattr(qapp, "_skeleplex_qt_pump_task", None)
+    if existing is not None and not existing.done():
+        # a pump is already running on this kernel's loop; do not stack another.
+        return
+
+    async def _pump_qt() -> None:
+        while True:
+            try:
+                qapp.processEvents()
+            except Exception:
+                # keep the pump alive across any transient Qt event error
+                pass
+            await asyncio.sleep(_QT_UPDATE_INTERVAL_S)
+
+    # Scheduled on the kernel's running loop (this runs during cell execution),
+    # so the pump and cellier's tasks share that single, never-parked loop.
+    qapp._skeleplex_qt_pump_task = asyncio.ensure_future(_pump_qt())
 
 
 def should_launch_ipython_event_loop() -> bool:
     """
     Check if the IPython Qt event loop should be launched.
 
-    This means that we are both in an IPython environment and the
-    event loop is not already running.
+    This means we are in an IPython/Jupyter environment. Idempotency (not
+    starting a second pump) is handled inside ``start_qt_loop_ipython``.
 
     Returns
     -------
@@ -156,17 +199,28 @@ def should_launch_ipython_event_loop() -> bool:
         # not in IPython environment
         return False
 
-    return not shell.active_eventloop == "qt"
+    return True
 
 
 def run():
-    """Start the Qt application event loop.
+    """Start a unified Qt + asyncio event loop and block until close.
 
-    This is meant to be used in a script.
-    This should be called after the viewer is set up.
+    This is meant to be used in a script, after the viewer is set up.
+
+    cellier uses asyncio for slicing. Thus, it needs the asyncio event loop
+    in addition to the Qt loop. This uses qasync to integrate the
+    asyncio events into the Qt loop.
     """
-    # get the qapplication instance
-    qapp = QApplication.instance() or QApplication([])
+    import asyncio
 
-    # start the Qt application event loop
-    qapp.exec_()
+    import qasync
+
+    # ensure a QApplication exists before starting the integrated loop
+    qapp = QApplication.instance() or QApplication([])
+    event_loop = qasync.QEventLoop(qapp)
+    asyncio.set_event_loop(event_loop)
+
+    app_close = asyncio.Event()
+    qapp.aboutToQuit.connect(app_close.set)
+    with event_loop:
+        event_loop.run_until_complete(app_close.wait())

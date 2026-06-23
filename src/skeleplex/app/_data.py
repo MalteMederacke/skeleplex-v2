@@ -7,7 +7,6 @@ from pathlib import Path
 
 import numpy as np
 import zarr
-from cellier.types import MouseButton, MouseCallbackData, MouseEventType, MouseModifiers
 from cmap import Color
 from psygnal import EventedModel, Signal, SignalGroup
 from pydantic.types import FilePath
@@ -520,11 +519,13 @@ class SegmentationView:
         elif self._mode == ViewMode.ALL:
             self._array = np.asarray(self._data_manager._segmentation)
 
-            scale = np.array(self._data_manager.segmentation_scale)
+            # build the transform in data (z, y, x) axis order; cellier reverses
+            # to pygfx order internally.
+            scale = np.array(self._data_manager.segmentation_scale)  # (z, y, x)
             transform = np.eye(4)
-            transform[0, 0] = scale[2]
-            transform[1, 1] = scale[1]
-            transform[2, 2] = scale[0]
+            transform[0, 0] = scale[0]  # z
+            transform[1, 1] = scale[1]  # y
+            transform[2, 2] = scale[2]  # x
             self._transform = transform
 
         elif self._mode == ViewMode.BOUNDING_BOX:
@@ -548,15 +549,15 @@ class SegmentationView:
                 ]
             )
 
-            # we have to swap the 0, 2 axes to since the volume gets rendered as z,y,x
-            # I'm not sure if we should swap the volume axes instead
+            # build the transform in data (z, y, x) axis order, including the
+            # translation; cellier reverses to pygfx order internally.
             transform = np.eye(4)
-            transform[0, 0] = scale[2]
-            transform[1, 1] = scale[1]
-            transform[2, 2] = scale[0]
-            transform[0, 3] = bounding_box_min_vx[2] * scale[2]
-            transform[1, 3] = bounding_box_min_vx[1] * scale[1]
-            transform[2, 3] = bounding_box_min_vx[0] * scale[0]
+            transform[0, 0] = scale[0]  # z
+            transform[1, 1] = scale[1]  # y
+            transform[2, 2] = scale[2]  # x
+            transform[0, 3] = bounding_box_min_vx[0] * scale[0]  # z
+            transform[1, 3] = bounding_box_min_vx[1] * scale[1]  # y
+            transform[2, 3] = bounding_box_min_vx[2] * scale[2]  # x
             self._transform = transform
         else:
             raise NotImplementedError(f"View mode {self._mode} not implemented.")
@@ -1020,36 +1021,45 @@ class DataManager:
         self._load_segmentation()
         self.events.data.emit()
 
-    def _on_edge_selection_click(
-        self, event: MouseCallbackData, click_source: str = "data"
-    ):
+    def _on_edge_selection_click(self, event, click_source: str = "data"):
         """Callback for the edge picking event from the renderer.
 
         Parameters
         ----------
-        event : pygfx.PointerEvent
-            The event data from the pygfx click event.
+        event : cellier.events.CanvasMousePress3DEvent
+            The 3D canvas press event from cellier.
         click_source : str
-            The source of the click event. Should be either "data" (the main visual)
-            or "highlight" (the highlight visual).
+            The source of the click event. One of "data" (the main visual),
+            "highlight" (the highlight visual), or "background" (empty space or a
+            non-skeleton visual).
         """
-        if (
-            (MouseModifiers.CTRL not in event.modifiers)
-            or (event.button != MouseButton.LEFT)
-            or (event.type != MouseEventType.PRESS)
-        ):
-            # only pick with control + LMB
+        if ("Control" not in event.modifiers) or (event.button != 1):
+            # only pick with control + LMB (left button == 1)
             return
 
-        # get the index of the vertex the click was close to
-        vertex_index = event.pick_info["vertex_index"]
+        if click_source == "background":
+            # clicking empty space clears the selection, unless Shift is held
+            # (Shift+Ctrl is the additive gesture, so a miss is a no-op).
+            if "Shift" not in event.modifiers and self.selection.edge.values:
+                self.selection.edge.values.clear()
+                self.selection.edge.events.values.emit(self.selection.edge.values)
+            return
 
-        # get the edge key from the vertex index
+        pick = event.pick_info
+        if pick.details is None:
+            # no element-level pick info; nothing to select
+            return
+
+        # LinesPickInfo.edge_index is the store segment index; edge_keys is
+        # per-vertex, so the two vertices of segment s share edge_keys[2 * s].
+        edge_index = pick.details.edge_index
+
+        # get the edge key from the edge index
         if click_source == "data":
-            edge_key_numpy = self.skeleton_view.edge_keys[vertex_index]
+            edge_key_numpy = self.skeleton_view.edge_keys[2 * edge_index]
             edge_key = (int(edge_key_numpy[0]), int(edge_key_numpy[1]))
         elif click_source == "highlight":
-            edge_key = tuple(self.skeleton_view.highlighted_edge_keys[vertex_index])
+            edge_key = tuple(self.skeleton_view.highlighted_edge_keys[2 * edge_index])
         else:
             raise ValueError(f"Unknown click source: {click_source}")
 
@@ -1058,50 +1068,58 @@ class DataManager:
             self.selection.edge.values.remove(edge_key)
         else:
             # if the edge is not selected, select it.
-            if MouseModifiers.SHIFT not in event.modifiers:
+            if "Shift" not in event.modifiers:
                 # if shift is not pressed, clear the selection
                 self.selection.edge.values.clear()
             self.selection.edge.values.add(edge_key)
         self.selection.edge.events.values.emit(self.selection.edge.values)
 
-    def _on_node_selection_click(
-        self, event: MouseCallbackData, click_source: str = "data"
-    ):
+    def _on_node_selection_click(self, event, click_source: str = "data"):
         """Callback for the node picking event from the renderer.
 
         Parameters
         ----------
-        event : pygfx.PointerEvent
-            The event data from the pygfx click event.
+        event : cellier.events.CanvasMousePress3DEvent
+            The 3D canvas press event from cellier.
         click_source : str
-            The source of the click event. Should be either "data" (the main visual)
-            or "highlight" (the highlight visual).
+            The source of the click event. One of "data" (the main visual),
+            "highlight" (the highlight visual), or "background" (empty space or a
+            non-skeleton visual).
         """
-        if (
-            (MouseModifiers.CTRL not in event.modifiers)
-            or (event.button != MouseButton.LEFT)
-            or (event.type != MouseEventType.PRESS)
-        ):
-            # only pick with control + LMB
+        if ("Control" not in event.modifiers) or (event.button != 1):
+            # only pick with control + LMB (left button == 1)
             return
 
-        # get the index of the vertex the click was close to
-        vertex_index = event.pick_info["vertex_index"]
+        if click_source == "background":
+            # clicking empty space clears the selection, unless Shift is held
+            # (Shift+Ctrl is the additive gesture, so a miss is a no-op).
+            if "Shift" not in event.modifiers and self.selection.node.values:
+                self.selection.node.values.clear()
+                self.selection.node.events.values.emit(self.selection.node.values)
+            return
 
-        # get the edge key from the vertex index
+        pick = event.pick_info
+        if pick.details is None:
+            # no element-level pick info; nothing to select
+            return
+
+        # PointsPickInfo.point_index is 1:1 with node_keys
+        point_index = pick.details.point_index
+
+        # get the node key from the point index
         if click_source == "data":
-            node_key = int(self.skeleton_view.node_keys[vertex_index])
+            node_key = int(self.skeleton_view.node_keys[point_index])
         elif click_source == "highlight":
-            node_key = int(self.skeleton_view.highlighted_node_keys[vertex_index])
+            node_key = int(self.skeleton_view.highlighted_node_keys[point_index])
         else:
             raise ValueError(f"Unknown click source: {click_source}")
 
         if node_key in self.selection.node.values:
-            # if the edge is already selected, deselect it.
+            # if the node is already selected, deselect it.
             self.selection.node.values.remove(node_key)
         else:
-            # if the edge is not selected, select it.
-            if MouseModifiers.SHIFT not in event.modifiers:
+            # if the node is not selected, select it.
+            if "Shift" not in event.modifiers:
                 # if shift is not pressed, clear the selection
                 self.selection.node.values.clear()
             self.selection.node.values.add(node_key)

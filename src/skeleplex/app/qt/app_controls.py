@@ -19,6 +19,7 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from superqt import QLabeledDoubleSlider
 
 from skeleplex.app._data import (
     AllViewRequest,
@@ -30,6 +31,7 @@ from skeleplex.app._data import (
     SkeletonGraphFile,
     ViewRequest,
 )
+from skeleplex.app._viewer_controller import DEFAULT_SEGMENTATION_OPACITY
 from skeleplex.app.qt.flat_group_box import FlatHGroupBox, FlatVGroupBox
 from skeleplex.app.qt.styles import (
     DOCK_WIDGET_STYLE,
@@ -237,6 +239,9 @@ class SegmentationDataViewWidget(FlatHGroupBox):
     # signal gets emitted when a view request is made
     view_requested = Signal(ViewRequest)
 
+    # signal gets emitted when the segmentation opacity is changed
+    opacity_changed = Signal(float)
+
     def __init__(self, collapsible: bool = False, parent: QWidget | None = None):
         super().__init__(
             title="Segmentation View",
@@ -275,6 +280,19 @@ class SegmentationDataViewWidget(FlatHGroupBox):
         self.view_bounding_box_controls = ViewBoundingBoxControls(parent=self)
         self.view_bounding_box_controls.setVisible(False)
 
+        # make the opacity slider so the skeleton underneath stays visible
+        self.opacity_box = QGroupBox(title="Opacity", parent=self)
+        self.opacity_box.setStyleSheet(GROUP_BOX_STYLE)
+        self.opacity_slider = QLabeledDoubleSlider(Qt.Orientation.Horizontal)
+        self.opacity_slider.setRange(0.0, 1.0)
+        self.opacity_slider.setSingleStep(0.05)
+        self.opacity_slider.setDecimals(2)
+        self.opacity_slider.setValue(DEFAULT_SEGMENTATION_OPACITY)
+        opacity_layout = QVBoxLayout()
+        opacity_layout.addWidget(self.opacity_slider)
+        self.opacity_box.setLayout(opacity_layout)
+        self.opacity_slider.valueChanged.connect(self.opacity_changed)
+
         # connect the view none event
         self.view_none_controls.render_requested.connect(self._on_view_requested)
 
@@ -289,11 +307,26 @@ class SegmentationDataViewWidget(FlatHGroupBox):
         # connect the mode buttons
         self.mode_buttons.buttonClicked.connect(self._on_mode_changed)
 
-        # Add the widgets
-        self.add_widget(self.button_box)
-        self.add_widget(self.view_none_controls)
-        self.add_widget(self.view_all_controls)
-        self.add_widget(self.view_bounding_box_controls)
+        # top row: radio buttons on the left, the active mode controls on the
+        # right (only one of the mode-control widgets is visible at a time)
+        top_row = QWidget(parent=self)
+        top_row_layout = QHBoxLayout()
+        top_row_layout.setContentsMargins(0, 0, 0, 0)
+        top_row_layout.addWidget(self.button_box)
+        top_row_layout.addWidget(self.view_none_controls)
+        top_row_layout.addWidget(self.view_all_controls)
+        top_row_layout.addWidget(self.view_bounding_box_controls)
+        top_row.setLayout(top_row_layout)
+
+        # stack the top row above the full-width opacity slider
+        content = QWidget(parent=self)
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.addWidget(top_row)
+        content_layout.addWidget(self.opacity_box)
+        content.setLayout(content_layout)
+
+        self.add_widget(content)
 
     def _on_mode_changed(self):
         if self.none_button.isChecked():
