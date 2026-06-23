@@ -47,6 +47,10 @@ def run_all_angle_metrics(graph, **kwargs):
     """Runs all registered angle metrics in order.
 
     Each metric must accept a graph, and may accept additional keyword arguments.
+    kwargs required are:
+    - origin: The origin of the graph, used for angle calculations
+    - sample_positions: The positions along the spline to sample for angle calculations
+
     Returns a list of (name, graph_out, extra_return_values).
     """
     results = []
@@ -157,7 +161,7 @@ def compute_midline_branch_angle_branch_nodes(graph: nx.DiGraph):
     return graph, midline_vector
 
 
-@angle_metric
+#@angle_metric
 def compute_midline_branch_angle_spline(
     graph: nx.DiGraph, sample_positions: np.ndarray, approx=False
 ):
@@ -293,6 +297,10 @@ def compute_rotation_angle(graph: nx.DiGraph):
         if isinstance(sister[0], list):
             sister = tuple(sister[0])
 
+        needed = {parent[0], parent[1], parent_sister[1], edge[0], edge[1], sister[1]}
+        if not needed.issubset(node_coord):
+            continue
+
         parent_plane = [
             node_coord[parent[0]],
             node_coord[parent[1]],
@@ -354,6 +362,10 @@ def compute_rotation_angle_parent_vector_daughter_plane(graph: nx.DiGraph):
 
         if isinstance(sister[0], list):
             sister = tuple(sister[0])
+
+        needed = {parent[0], parent[1], edge[0], edge[1], sister[1]}
+        if not needed.issubset(node_coord):
+            continue
 
         parent_vector = node_coord[parent[1]] - node_coord[parent[0]]
         parent_vector_unit = unit_vector(parent_vector)
@@ -578,14 +590,14 @@ def compute_hc(graph: nx.DiGraph,
     for edge in graph.edges():
         diameter = diameter_dict.get(edge)
         tissue_thickness = tissue_thickness_dict.get(edge)
-        total_diameter = diameter + tissue_thickness
+        total_diameter = diameter + 2*tissue_thickness
         # Process parent relationship
         parent_edge = parent_edge_dict.get(edge)
         if parent_edge:
             parent_edge = tuple(parent_edge)
             parent_diameter = diameter_dict.get(parent_edge[0])
             parent_tissue_thickness = tissue_thickness_dict.get(parent_edge[0])
-            parent_total_diameter = parent_diameter + parent_tissue_thickness
+            parent_total_diameter = parent_diameter + 2*parent_tissue_thickness
             results['parent_diameter'][edge] = parent_diameter
             h_dict[edge] = diameter / parent_diameter
             h_total_dict[edge] = total_diameter / parent_total_diameter
@@ -595,14 +607,14 @@ def compute_hc(graph: nx.DiGraph,
             sister_edge = tuple(sister_edge)
             sister_diameter = diameter_dict.get(sister_edge)
             sister_tissue_thickness = tissue_thickness_dict.get(sister_edge)
-            sister_total_diameter = sister_diameter + sister_tissue_thickness
+            sister_total_diameter = sister_diameter + 2*sister_tissue_thickness
             results['sister_diameter'][edge] = sister_diameter
             parent_diameter = results['parent_diameter'].get(edge)
             if parent_diameter is not None:
                 parent_tissue_thickness = tissue_thickness_dict.get(
                     next(iter(parent_edge_dict.get(edge)))
                     )
-                parent_total_diameter = parent_diameter + parent_tissue_thickness
+                parent_total_diameter = parent_diameter + 2*parent_tissue_thickness
                 h_sister_dict[edge] = sister_diameter / parent_diameter
                 h_total_sister_dict[edge] = sister_total_diameter/parent_total_diameter
 
@@ -619,8 +631,8 @@ def compute_hc(graph: nx.DiGraph,
 
             results['hc'][edge] = hc
             results['hc_total'][edge] = hc_total
-            results['hc_theta'][edge] = np.rad2deg(np.arccos(hc))
-            results['hc_total_theta'][edge] = np.rad2deg(np.arccos(hc_total))
+            results['hc_theta'][edge] = np.rad2deg(np.arccos(hc)) if -1 <= hc <= 1 else np.nan
+            results['hc_total_theta'][edge] = np.rad2deg(np.arccos(hc_total)) if -1 <= hc_total <= 1 else np.nan
 
     # Set all computed attributes on the graph
     for attr_name, attr_dict in results.items():

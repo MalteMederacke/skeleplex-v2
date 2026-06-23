@@ -16,6 +16,7 @@ from skeleplex.app._curate import (
     BreakDetectionWidget,
     ChangeBranchColorWidget,
     ConnectedComponentsWidget,
+    HighLevelPathWidget,
     RenderAroundNodeWidget,
     RenderReachableEdgesWidget,
     make_split_edge_widget,
@@ -110,7 +111,7 @@ def view_skeleton(
 
             ChangeBranchColorWidget(viewer)
             ConnectedComponentsWidget(viewer)
-            BreakDetectionWidget(viewer)
+            # BreakDetectionWidget(viewer)
 
             # add to viewer
             viewer.add_auxiliary_widget(undo_widget.native, name="Undo")
@@ -124,6 +125,7 @@ def view_skeleton(
             )
             viewer.add_auxiliary_widget(split_edge_widget.native, name="Split edge")
             RenderReachableEdgesWidget(viewer)
+            HighLevelPathWidget(viewer)
 
         except Exception as e:
             print(f"Error launching widgets: {e}")

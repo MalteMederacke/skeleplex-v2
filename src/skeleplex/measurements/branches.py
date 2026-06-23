@@ -125,6 +125,7 @@ def filter_and_segment_lumen(
         with h5py.File(os.path.join(data_path, file), "r") as f:
             image_slices = f["image"][:]
             segmentation_slices = f[segmentation_key][:] != 0
+            pixel_spacing_um = float(f.attrs.get("sample_grid_spacing_um", 1.0))
 
         label_slices_filt = np.zeros_like(segmentation_slices, dtype=np.uint8)
         index_to_remove = []
@@ -193,6 +194,7 @@ def filter_and_segment_lumen(
         with h5py.File(os.path.join(save_path, file), "w") as f:
             f.create_dataset("image", data=image_slice_filt)
             f.create_dataset("segmentation", data=label_slices_filt)
+            f.attrs["sample_grid_spacing_um"] = pixel_spacing_um
 
 
 def find_lumen_in_slice(
@@ -503,13 +505,18 @@ def fix_only_lumen(segmentation_slice):
 
 
 def add_file_to_graph(file ,
-                      thickness_from = "ellipse"):
+                      thickness_from = "ellipse", 
+                      only_lumen=False):
     """Process a single HDF5 file."""
     try:
         with h5py.File(file, "r") as f:
             image_slices = f["image"][:]
             segmentation_slices = f["segmentation"][:]
             pixel_spacing_um = float(f.attrs.get("sample_grid_spacing_um", 1.0))
+            if pixel_spacing_um == 1.0:
+                logger.warning(
+                    f"Pixel spacing not found in {file}, defaulting to 1.0 um."
+                )
     except Exception as e:
         logger.warning(f"Error loading {file}: {e}")
         return None
@@ -562,6 +569,7 @@ def add_file_to_graph(file ,
                     tissue_radius = total_radius - lumen_radius
                     tissue_radius_branch.append(tissue_radius)
                     lumen_radius_branch.append(lumen_radius)
+
             else:
                 # no tissue label, full region is tissue
                 if thickness_from == "ellipse":
@@ -569,6 +577,17 @@ def add_file_to_graph(file ,
                 elif thickness_from == "distance_transform":
                     tissue_radius_branch.append(tissue_thickness_distance_transform(segmentation_slice))
                 lumen_radius_branch.append(0)
+        elif only_lumen:
+            # only lumen segmentation, no tissue label available
+            lumen_label = (segmentation_slice > 0).astype(np.uint8)
+            lumen_props = ski.measure.regionprops(ski.measure.label(lumen_label))
+            if lumen_props:
+                lumen_radius = radius_from_area(lumen_props[0].area)
+                lumen_radius_branch.append(lumen_radius)
+                total_area_branch.append(lumen_props[0].area)
+                minor_axis_branch.append(lumen_props[0].minor_axis_length)
+                major_axis_branch.append(lumen_props[0].major_axis_length)
+            tissue_radius_branch.append(0)
         else:
             # completely closed (no lumen)
             label_slice = ski.measure.label((segmentation_slice != 0).astype(np.uint8))
@@ -638,7 +657,8 @@ def tissue_thickness_distance_transform(segmentation_slice):
 
 def add_measurements_from_h5_to_graph(graph_path,
                                       input_path,
-                                      thickness_from: Literal["ellipse", "distance_transform"] = "ellipse"):
+                                      thickness_from: Literal["ellipse", "distance_transform"] = "ellipse",
+                                      only_lumen: bool = False):
     """
     Add measurements from HDF5 files to the skeleton graph.
 
@@ -656,7 +676,15 @@ def add_measurements_from_h5_to_graph(graph_path,
         Path to the skeleton graph JSON file.
     input_path : str
         Path to the directory containing HDF5 files with the segmented slices.
-
+    thickness_from : str
+        Method to calculate tissue thickness when no lumen is present. Options are
+        "ellipse" (uses the minor axis of the fitted ellipse) or "distance_transform"
+        (uses the maximum distance to the background within the tissue).
+    only_lumen : bool
+        If True, only lumen segmentation is available in the slices.
+        In this case, the tissue thickness is 0 and the lumen diameter is calculated from the full segmentation. 
+        If False, both lumen and tissue are segmented,
+        and the lumen diameter and tissue thickness are calculated separately.
     Returns
     -------
     SkeletonGraph
@@ -698,7 +726,9 @@ def add_measurements_from_h5_to_graph(graph_path,
     files = [os.path.join(input_path, f) for f in files]
 
     # Process files in parallel
-    fn = partial(add_file_to_graph, thickness_from=thickness_from)
+    fn = partial(add_file_to_graph,
+                 thickness_from=thickness_from,
+                 only_lumen=only_lumen)
     results = []
     with concurrent.futures.ProcessPoolExecutor(max_workers=12) as executor:
         for result in tqdm(executor.map(fn, files), total=len(files)):

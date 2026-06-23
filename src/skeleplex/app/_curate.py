@@ -1363,7 +1363,10 @@ class RenderReachableEdgesWidget(QWidget):
 
         try:
             edge = next(iter(edges))
-            graph = self.viewer.data.skeleton_graph.graph
+            skeleton_graph = self.viewer.data.skeleton_graph
+            if isinstance(skeleton_graph.graph, nx.DiGraph):
+                skeleton_graph.to_directed(skeleton_graph.origin)
+            graph = skeleton_graph.graph
             n_steps = self._steps_spinbox.value() or None
             reachable = get_reachable_edges(graph, edge, n_steps=n_steps)
             input_key = (edge[0], edge[1])
@@ -1392,6 +1395,211 @@ class RenderReachableEdgesWidget(QWidget):
             )
         except Exception as e:
             self._set_status(f"Error: {e}")
+
+    def _on_reset_clicked(self) -> None:
+        """Restore the default uniform blue colormap."""
+        try:
+            self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
+                colormap={},
+                default_color=self._DEFAULT_BLUE,
+            )
+            self._set_status("")
+        except Exception as e:
+            self._set_status(f"Reset error: {e}")
+
+
+class HighLevelPathWidget(QWidget):
+    """Widget that finds and highlights the path to the highest-generation edge.
+
+    Useful for detecting unintended fusions with vasculature, which tend to
+    create spuriously deep branches with high generation numbers (>30).
+
+    A "Recompute" button re-runs graph_to_directed and compute_level so the
+    generation attribute stays current after edits. "Find deepest path" jumps
+    to rank #1; "Next →" steps down to the 2nd, 3rd, … deepest edge in turn.
+    The path from origin is shown in blue; the shortest edge on it (the likely
+    fusion point) is shown in red.
+
+    Parameters
+    ----------
+    viewer : SkelePlexApp
+        The SkelePlex application instance.
+    """
+
+    _PATH_COLOR = np.array([0.3, 0.3, 0.8, 1.0], dtype=np.float32)
+    _SHORTEST_COLOR = np.array([1.0, 0.0, 0.0, 1.0], dtype=np.float32)
+    _OTHER_COLOR = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    _DEFAULT_BLUE = np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
+
+    def __init__(self, viewer) -> None:
+        super().__init__()
+        self.viewer = viewer
+        self._sorted_edges: list[tuple[int, int]] = []
+        self._current_idx: int = 0
+
+        origin_label = QLabel("Origin node:")
+        self._origin_input = QLineEdit()
+        self._origin_input.setPlaceholderText("e.g. {0}")
+
+        recompute_button = QPushButton("Recompute directed graph + level")
+        recompute_button.clicked.connect(self._on_recompute_clicked)
+
+        highlight_button = QPushButton("Find deepest path")
+        highlight_button.clicked.connect(self._on_highlight_clicked)
+
+        next_button = QPushButton("Next →")
+        next_button.clicked.connect(self._on_next_clicked)
+
+        reset_button = QPushButton("Reset colors")
+        reset_button.clicked.connect(self._on_reset_clicked)
+
+        self._status_label = QLabel("")
+        self._status_label.setWordWrap(True)
+
+        layout = QVBoxLayout()
+        layout.addWidget(origin_label)
+        layout.addWidget(self._origin_input)
+        layout.addWidget(recompute_button)
+        layout.addWidget(highlight_button)
+        layout.addWidget(next_button)
+        layout.addWidget(reset_button)
+        layout.addWidget(self._status_label)
+        self.setLayout(layout)
+
+        viewer.add_auxiliary_widget(self, name="Deep Path Finder")
+
+    def _set_status(self, msg: str) -> None:
+        self._status_label.setText(msg)
+
+    def _get_origin(self) -> int | None:
+        text = self._origin_input.text().strip()
+        if not text:
+            return self.viewer.data.skeleton_graph.origin
+        try:
+            node_set = node_string_to_node_keys(text)
+            return next(iter(node_set), None)
+        except ValueError:
+            return None
+
+    def _on_recompute_clicked(self) -> None:
+        """Recompute the directed graph and generation levels."""
+        from skeleplex.measurements.graph_properties import compute_level
+
+        try:
+            origin = self._get_origin()
+            if origin is None:
+                self._set_status("Could not parse origin node.")
+                return
+
+            skeleton_graph = self.viewer.data.skeleton_graph
+            self._set_status("Computing directed graph…")
+            skeleton_graph.to_directed(origin)
+
+            self._set_status("Computing generation levels…")
+            skeleton_graph.graph = compute_level(skeleton_graph.graph, origin)
+
+            gen_vals = nx.get_edge_attributes(skeleton_graph.graph, GENERATION_KEY)
+            finite_vals = [v for v in gen_vals.values() if not np.isnan(v)]
+            max_gen = int(max(finite_vals)) if finite_vals else 0
+            self._sorted_edges = []
+            self._current_idx = 0
+            self._set_status(f"Done. Origin: {origin}, max generation: {max_gen}.")
+        except Exception as e:
+            self._set_status(f"Error: {e}")
+
+    def _build_sorted_edges(self) -> bool:
+        """Populate _sorted_edges sorted by descending generation. Returns False on error."""
+        graph = self.viewer.data.skeleton_graph.graph
+        gen_dict = nx.get_edge_attributes(graph, GENERATION_KEY)
+        if not gen_dict:
+            self._set_status("No generation attribute. Use 'Recompute' first.")
+            return False
+        self._sorted_edges = sorted(
+            gen_dict,
+            key=lambda e: gen_dict[e] if not np.isnan(gen_dict[e]) else -1,
+            reverse=True,
+        )
+        return True
+
+    def _highlight_at_index(self) -> None:
+        """Highlight the path to _sorted_edges[_current_idx]."""
+        try:
+            skeleton_graph = self.viewer.data.skeleton_graph
+            graph = skeleton_graph.graph
+            origin = skeleton_graph.origin
+
+            if origin is None:
+                self._set_status("No origin set. Use 'Recompute' first.")
+                return
+
+            if not self._sorted_edges:
+                self._set_status("Run 'Find deepest path' first.")
+                return
+
+            max_edge = self._sorted_edges[self._current_idx]
+            gen_dict = nx.get_edge_attributes(graph, GENERATION_KEY)
+            max_gen = gen_dict.get(max_edge, float("nan"))
+
+            u, v = max_edge
+            try:
+                node_path = nx.shortest_path(graph, origin, u)
+            except nx.NetworkXNoPath:
+                self._set_status(
+                    f"No path from origin {origin} to edge {max_edge}."
+                )
+                return
+
+            path_edges: set[tuple[int, int]] = set()
+            for i in range(len(node_path) - 1):
+                path_edges.add((node_path[i], node_path[i + 1]))
+            path_edges.add((u, v))
+
+            length_dict = nx.get_edge_attributes(graph, LENGTH_KEY)
+            path_lengths = {e: length_dict.get(e, float("inf")) for e in path_edges}
+            shortest_edge = min(path_lengths, key=path_lengths.get)
+
+            color_dict: dict[tuple[int, int], np.ndarray] = {}
+            for graph_edge in graph.edges():
+                key = (graph_edge[0], graph_edge[1])
+                if key == shortest_edge:
+                    color_dict[key] = self._SHORTEST_COLOR.copy()
+                elif key in path_edges:
+                    color_dict[key] = self._PATH_COLOR.copy()
+                else:
+                    color_dict[key] = self._OTHER_COLOR.copy()
+
+            self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
+                colormap=color_dict,
+                default_color=self._OTHER_COLOR,
+            )
+            self._set_status(
+                f"Rank {self._current_idx + 1}/{len(self._sorted_edges)} — "
+                f"generation: {int(max_gen)} at edge {max_edge}. "
+                f"Path: {len(path_edges)} edge(s). "
+                f"Shortest on path: {shortest_edge} "
+                f"(length: {path_lengths[shortest_edge]:.1f})."
+            )
+        except Exception as e:
+            self._set_status(f"Error: {e}")
+
+    def _on_highlight_clicked(self) -> None:
+        """Build the sorted edge list and show the deepest path (rank 1)."""
+        if not self._build_sorted_edges():
+            return
+        self._current_idx = 0
+        self._highlight_at_index()
+
+    def _on_next_clicked(self) -> None:
+        """Step to the next deepest path."""
+        if not self._sorted_edges:
+            if not self._build_sorted_edges():
+                return
+            self._current_idx = 0
+        else:
+            self._current_idx = min(
+                self._current_idx + 1, len(self._sorted_edges) - 1
+            )
+        self._highlight_at_index()
 
     def _on_reset_clicked(self) -> None:
         """Restore the default uniform blue colormap."""

@@ -332,6 +332,82 @@ def sample_slices_for_edge(
     return (u, v), image_slice, segmentation_slice
 
 
+def _process_edge_batch(
+    edge_batch: list[tuple],
+    volume_path: str,
+    segmentation_path: str | None,
+    positions: np.ndarray,
+    slice_size_um: float,
+    sample_grid_spacing_um: float,
+    interpolation_order: int,
+    image_voxel_size_um,
+    approx: bool,
+) -> list:
+    """Process a batch of edges, opening zarr stores once for the whole batch.
+
+    Parameters
+    ----------
+    edge_batch : list of (u, v, spline) tuples
+        Each tuple contains source node, target node, and the spline object.
+    volume_path : str
+        Path to the zarr volume file.
+    segmentation_path : str or None
+        Path to the zarr segmentation file, or None to skip segmentation.
+    positions : np.ndarray
+        Normalised arc-length positions at which to sample each spline.
+    slice_size_um : float
+        Edge length of each slice in microns.
+    sample_grid_spacing_um : float
+        Pixel size of the output slices in microns.
+    interpolation_order : int
+        Spline interpolation order for the image (use 0 for labels).
+    image_voxel_size_um : tuple
+        Voxel size of the source volume in microns.
+    approx : bool
+        Whether to use approximate spline evaluation.
+    """
+    _logger = logging.getLogger(__name__)
+    volume = da.from_zarr(volume_path, chunks="auto")
+    segmentation = (
+        da.from_zarr(segmentation_path, chunks="auto")
+        if segmentation_path is not None
+        else None
+    )
+
+    results = []
+    for u, v, spline in edge_batch:
+        try:
+            image_slice = spline.sample_volume_2d(
+                volume,
+                positions,
+                grid_shape_um=(slice_size_um, slice_size_um),
+                grid_spacing_um=(sample_grid_spacing_um, sample_grid_spacing_um),
+                sample_interpolation_order=interpolation_order,
+                sample_fill_value=0,
+                image_voxel_size_um=image_voxel_size_um,
+                approx=approx,
+            )
+            segmentation_slice = None
+            if segmentation is not None:
+                segmentation_slice = spline.sample_volume_2d(
+                    segmentation,
+                    positions,
+                    grid_shape_um=(slice_size_um, slice_size_um),
+                    grid_spacing_um=(sample_grid_spacing_um, sample_grid_spacing_um),
+                    sample_interpolation_order=0,
+                    image_voxel_size_um=image_voxel_size_um,
+                    sample_fill_value=0,
+                    approx=approx,
+                )
+            results.append(((u, v), image_slice, segmentation_slice))
+        except RecursionError:
+            _logger.warning(
+                f"Skipping edge ({u}, {v}): degenerate spline caused infinite "
+                "recursion in arc_length_to_parameter (likely NaN arc length)."
+            )
+    return results
+
+
 class SkeletonGraph:
     """Data class for a skeleton graph.
 
@@ -781,41 +857,54 @@ class SkeletonGraph:
         generation_dict = nx.get_edge_attributes(self.graph, GENERATION_KEY)
         spline_dict = nx.get_edge_attributes(self.graph, EDGE_SPLINE_KEY)
 
-        # Prepare a list of edges to process
-        edges_to_process = [
-            (u, v)
-            for u, v in nx.breadth_first_search.bfs_edges(self.graph, source=origin)
-            if (max_generation is None or generation_dict[(u, v)] <= max_generation)
-            and (min_generation is None or generation_dict[(u, v)] > min_generation)
+        def _get_generation(u, v):
+            if (u, v) in generation_dict:
+                return generation_dict[(u, v)]
+            return generation_dict[(v, u)]
+
+        # Compute positions once — identical for every edge
+        positions = np.linspace(0.1, 0.9, np.ceil(1 / slice_spacing).astype(int))
+
+        # Pre-extract (u, v, spline) triples so only the needed spline is
+        # pickled per task instead of the full spline_dict
+        filter_by_generation = max_generation is not None or min_generation is not None
+        edge_triples = []
+        for u, v in nx.breadth_first_search.bfs_edges(self.graph, source=origin):
+            if filter_by_generation:
+                gen = _get_generation(u, v)
+                if (max_generation is not None and gen > max_generation) or (
+                    min_generation is not None and gen <= min_generation
+                ):
+                    continue
+            spline = spline_dict.get((u, v)) or spline_dict.get((v, u))
+            edge_triples.append((u, v, spline))
+
+        # Batch edges so each task opens zarr once rather than once per edge.
+        # Aim for one batch per worker.
+        batch_size = max(1, (len(edge_triples) + num_workers - 1) // num_workers)
+        batches = [
+            edge_triples[i : i + batch_size]
+            for i in range(0, len(edge_triples), batch_size)
         ]
 
-        # Define a function to process each edge,
-        # needs to be local to be pickable, required for laziness
-        def process_edge(edge):
-            u, v = edge
-            spline = spline_dict[(u, v)]
-            positions = np.linspace(0.1, 0.9, np.ceil(1 / slice_spacing).astype(int))
-            return sample_slices_for_edge(
-                u,
-                v,
-                spline,
-                volume_path,
-                segmentation_path,
-                positions,
-                slice_size_um,
-                sample_grid_spacing_um,
-                interpolation_order,
-                image_voxel_size_um,
-                approx,
-            )
+        shared = (
+            volume_path,
+            segmentation_path,
+            positions,
+            slice_size_um,
+            sample_grid_spacing_um,
+            interpolation_order,
+            image_voxel_size_um,
+            approx,
+        )
+        tasks = [delayed(_process_edge_batch)(batch, *shared) for batch in batches]
 
-        # Use Dask delayed to process edges in parallel
-        tasks = [delayed(process_edge)(edge) for edge in edges_to_process]
-
-        # Compute all tasks in parallel
-        logger.info(f"Processing {len(tasks)} edges in parallel.")
+        logger.info(
+            f"Processing {len(edge_triples)} edges in {len(batches)} batches "
+            f"({batch_size} edges/batch)."
+        )
         with ProgressBar():
-            results = dask.compute(
+            batch_results = dask.compute(
                 *tasks, num_workers=num_workers, scheduler="processes"
             )
 
@@ -823,14 +912,12 @@ class SkeletonGraph:
         image_slice_dict = {}
         segmentation_slice_dict = {}
 
-        for result in results:
-            (u, v), image_slice, segmentation_slice = result
-            image_slice_dict[(u, v)] = image_slice
-            if segmentation_path is not None:
-                segmentation_slice_dict[(u, v)] = segmentation_slice
+        for batch_result in batch_results:
+            for (u, v), image_slice, segmentation_slice in batch_result:
+                image_slice_dict[(u, v)] = image_slice
+                if segmentation_path is not None:
+                    segmentation_slice_dict[(u, v)] = segmentation_slice
+
         if segmentation_path is not None:
-            return (
-                image_slice_dict,
-                segmentation_slice_dict,
-            )
+            return image_slice_dict, segmentation_slice_dict
         return image_slice_dict
