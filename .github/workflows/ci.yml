@@ -45,6 +45,13 @@ jobs:
           cache-dependency-path: "pyproject.toml"
           cache: "pip"
 
+      # Install the native Qt system libraries (libEGL, libGL, libxkbcommon,
+      # etc.) that PySide6 needs at import time. Only required on Linux; the
+      # macOS/Windows wheels link against the OS-native graphics stack.
+      - name: Install Qt system libraries
+        if: runner.os == 'Linux'
+        uses: tlambert03/setup-qt-libs@v1
+
       - name: Install Dependencies
         run: |
           python -m pip install -U pip
