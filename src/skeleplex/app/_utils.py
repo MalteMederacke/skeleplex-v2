@@ -19,6 +19,7 @@ from skeleplex.app._curate import (
     HighLevelPathWidget,
     RenderAroundNodeWidget,
     RenderReachableEdgesWidget,
+    guard,
     make_split_edge_widget,
 )
 
@@ -95,17 +96,20 @@ def view_skeleton(
 
     if launch_widgets:
         try:
-            undo_widget = magicgui(viewer.curate.undo)
+            # wrap the curate methods in ``guard`` so a bad entry logs a
+            # traceback instead of propagating into the Qt loop and crashing
+            # the viewer (magicgui call buttons are otherwise unguarded).
+            undo_widget = magicgui(guard(viewer.curate.undo))
             delete_edge_widget = magicgui(
-                viewer.curate.delete_edge,
+                guard(viewer.curate.delete_edge),
             )
             _ = RenderAroundNodeWidget(viewer)
 
             connect_without_merging_widget = magicgui(
-                viewer.curate.connect_without_merging,
+                guard(viewer.curate.connect_without_merging),
             )
             connect_with_merging_widget = magicgui(
-                viewer.curate.connect_with_merging,
+                guard(viewer.curate.connect_with_merging),
             )
             split_edge_widget = make_split_edge_widget(viewer)
 

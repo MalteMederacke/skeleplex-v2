@@ -313,6 +313,15 @@ class MainCanvasController:
             self._backend.update_appearance_field(
                 self._segmentation.visual.id, "opacity", DEFAULT_SEGMENTATION_OPACITY
             )
+
+            # Disable picking for the segmentation so the user can click through
+            # it to select the skeleton nodes/edges rendered underneath. With
+            # pick_write off the labels material is skipped in pygfx's pick pass,
+            # so the pick buffer reports the nearest pick-writing visual behind
+            # it (a node/edge) instead of the segmentation. pick_write is an
+            # evented field on the visual model; assignment fires the event
+            # cellier wired to update the material (default True -> False fires).
+            self._segmentation.visual.pick_write = False
         else:
             # the visual may have been hidden by a prior None update; ensure it
             # is visible again now that there is data to show.

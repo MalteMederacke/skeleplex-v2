@@ -1,4 +1,7 @@
+import functools
+import inspect
 import numbers
+import traceback
 from collections import deque
 from copy import deepcopy
 from io import BytesIO
@@ -9,6 +12,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 from magicgui import magicgui
+from magicgui.widgets import PushButton
 from qtpy.QtCore import QByteArray
 from qtpy.QtGui import QPixmap
 from qtpy.QtWidgets import (
@@ -49,6 +53,40 @@ from skan import Skeleton
 from skimage.morphology import label as sk_label
 
 from skeleplex.graph.break_detection import find_breaks_in_skeleton
+
+
+def guard(func):
+    """Catch exceptions in a Qt/psygnal callback so they are logged instead of
+    propagating into the event loop and aborting the viewer.
+
+    The wrapper is variadic (Qt's ``clicked`` passes a ``checked`` bool and
+    psygnal ``changed`` passes a value), so it forwards only as many positional
+    arguments as ``func`` actually declares — making it safe for both zero-arg
+    button slots and value-carrying ``changed`` slots.
+    """
+    try:
+        params = list(inspect.signature(func).parameters.values())
+        n_pos = sum(
+            p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD) for p in params
+        )
+        has_varargs = any(p.kind is p.VAR_POSITIONAL for p in params)
+    except (TypeError, ValueError):
+        n_pos, has_varargs = 0, False
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        if not has_varargs:
+            args = args[:n_pos]
+        try:
+            return func(*args, **kwargs)
+        except Exception:
+            traceback.print_exc()
+            print(
+                f"[skeleplex] error in {getattr(func, '__name__', func)!r}; "
+                "viewer kept alive (see traceback above)."
+            )
+
+    return wrapper
 
 
 def edge_string_to_key(edge_string: str) -> set[tuple[int, ...]]:
@@ -337,8 +375,19 @@ class CurationManager:
         node_to_keep = next(iter(node_to_keep), None)
         node_to_merge = next(iter(node_to_merge), None)
 
+        if node_to_keep is None or node_to_merge is None:
+            # if either node could not be parsed, do nothing
+            return
         if node_to_keep == node_to_merge:
             # if both nodes are the same, do nothing
+            return
+        graph = self._data.skeleton_graph.graph
+        if node_to_keep not in graph or node_to_merge not in graph:
+            # if either node is not in the graph, do nothing
+            print(
+                f"[skeleplex] cannot merge: node {node_to_keep} or "
+                f"{node_to_merge} is not in the graph."
+            )
             return
 
         # store the previous state in the undo buffer
@@ -527,6 +576,7 @@ class RenderAroundNodeWidget(QWidget):
     def _set_status(self, msg: str) -> None:
         self._status_label.setText(msg)
 
+    @guard
     def _on_render_clicked(self) -> None:
         self._set_status("")
         try:
@@ -551,6 +601,7 @@ class RenderAroundNodeWidget(QWidget):
         except Exception as e:
             self._set_status(f"Error: {e}")
 
+    @guard
     def _on_delete_clicked(self) -> None:
         self._set_status("")
         if self._bbox_min is None or self._bbox_max is None:
@@ -677,6 +728,7 @@ class BreakDetectionWidget(QWidget):
     def _set_status(self, msg: str) -> None:
         self._status_label.setText(msg)
 
+    @guard
     def _on_run_clicked(self) -> None:
         self._set_status("Running… (first run may be slow due to JIT compilation)")
         try:
@@ -821,6 +873,7 @@ class BreakDetectionWidget(QWidget):
 
             self._set_status(f"Error: {e}\n{traceback.format_exc()[:300]}")
 
+    @guard
     def _on_clear_clicked(self) -> None:
         if self._source_visual is not None:
             self._source_visual.appearance.visible = False
@@ -890,6 +943,7 @@ class ConnectedComponentsWidget(QWidget):
     def _set_status(self, msg: str) -> None:
         self._status_label.setText(msg)
 
+    @guard
     def _on_recompute_clicked(self) -> None:
         self._set_status("Computing...")
         try:
@@ -910,6 +964,7 @@ class ConnectedComponentsWidget(QWidget):
         except Exception as e:
             self._set_status(f"Error: {e}")
 
+    @guard
     def _on_prev_clicked(self) -> None:
         if len(self._components) < 2:
             self._set_status("Recompute first.")
@@ -918,6 +973,7 @@ class ConnectedComponentsWidget(QWidget):
         self._current_idx = (self._current_idx - 1) % n_others
         self._apply_colors()
 
+    @guard
     def _on_next_clicked(self) -> None:
         if len(self._components) < 2:
             self._set_status("Recompute first.")
@@ -961,6 +1017,7 @@ class ConnectedComponentsWidget(QWidget):
         except Exception as e:
             self._set_status(f"Color error: {e}")
 
+    @guard
     def _on_reset_clicked(self) -> None:
         try:
             self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
@@ -1004,6 +1061,7 @@ def make_split_edge_widget(viewer):
         split_edge(viewer.curate._data.skeleton_graph, edge_key, split_pos)
         viewer.curate._update_and_request_redraw()
 
+    @guard
     def preview_split():
         """Preview the split edge operation.
 
@@ -1024,6 +1082,42 @@ def make_split_edge_widget(viewer):
         )
         split_edge_widget.point_visual.appearance.visible = True
         viewer._viewer._backend.reslice_all()
+
+    @guard
+    def split_into_thirds_delete_middle():
+        """Split the selected edge into three parts and delete the middle one.
+
+        The edge is split into thirds and the central segment is removed, leaving
+        two stubs with a gap between them. For an edge ``(u, v)`` this yields
+        edges ``(u, a)`` (first third) and ``(b, v)`` (last third); the central
+        edge ``(a, b)`` is deleted.
+        """
+        edge_key = next(
+            iter(edge_string_to_key(split_edge_widget.edge_to_split_ID.value))
+        )
+        u, v = edge_key[0], edge_key[1]
+        skeleton_graph = viewer.curate._data.skeleton_graph
+        viewer.curate._undo_buffer.push(deepcopy(skeleton_graph))
+
+        # split off the first third; the remaining (node_a, v) edge spans the
+        # last two-thirds of the original edge.
+        nodes_before = set(skeleton_graph.graph.nodes)
+        split_edge(skeleton_graph, edge_key, 1.0 / 3.0)
+        node_a = (set(skeleton_graph.graph.nodes) - nodes_before).pop()
+
+        # split the remaining two-thirds in the middle to isolate the central
+        # third as edge (node_a, node_b).
+        nodes_before = set(skeleton_graph.graph.nodes)
+        split_edge(skeleton_graph, (node_a, v), 0.5)
+        node_b = (set(skeleton_graph.graph.nodes) - nodes_before).pop()
+
+        # remove the central segment, leaving (u, node_a) and (node_b, v) stubs.
+        delete_edge(skeleton_graph, (node_a, node_b), force=True)
+        viewer.curate._update_and_request_redraw()
+
+    split_into_thirds_button = PushButton(text="Split in 3, delete middle")
+    split_into_thirds_button.changed.connect(split_into_thirds_delete_middle)
+    split_edge_widget.append(split_into_thirds_button)
 
     split_edge_widget.split_pos.changed.connect(preview_split)
     point_size = np.max((np.max(viewer.data.node_coordinates) * 0.01, 50))
@@ -1138,6 +1232,7 @@ class ChangeBranchColorWidget(QWidget):
             return 0, 0
         return min(values), max(values)
 
+    @guard
     def _on_run_clicked(self):
         """Apply coloring."""
         self.change_branch_color(
@@ -1147,6 +1242,7 @@ class ChangeBranchColorWidget(QWidget):
             self.widget.vmax.value,
         )
 
+    @guard
     def _on_filter_clicked(self):
         """Run a filter function on edges."""
         self.filter_edges()
@@ -1161,11 +1257,13 @@ class ChangeBranchColorWidget(QWidget):
         self.widget.vmin.value = vmin
         self.widget.vmax.value = vmax
 
+    @guard
     def _on_attribute_change(self, value):
         """Callback when edge attribute is changed."""
         self._update_vmin_vmax(value)
         self._update_colorbar(value, self.widget.vmin.value, self.widget.vmax.value)
 
+    @guard
     def _on_slider_value_change(self):
         """Callback when vmin or vmax slider values are changed."""
         edge_attr = self.widget.edge_attribute.value
@@ -1349,6 +1447,7 @@ class RenderReachableEdgesWidget(QWidget):
     def _set_status(self, msg: str) -> None:
         self._status_label.setText(msg)
 
+    @guard
     def _on_run_clicked(self) -> None:
         """Parse the input edge, find reachable edges, and update edge colors."""
         self._set_status("")
@@ -1396,6 +1495,7 @@ class RenderReachableEdgesWidget(QWidget):
         except Exception as e:
             self._set_status(f"Error: {e}")
 
+    @guard
     def _on_reset_clicked(self) -> None:
         """Restore the default uniform blue colormap."""
         try:
@@ -1481,6 +1581,7 @@ class HighLevelPathWidget(QWidget):
         except ValueError:
             return None
 
+    @guard
     def _on_recompute_clicked(self) -> None:
         """Recompute the directed graph and generation levels."""
         from skeleplex.measurements.graph_properties import compute_level
@@ -1582,6 +1683,7 @@ class HighLevelPathWidget(QWidget):
         except Exception as e:
             self._set_status(f"Error: {e}")
 
+    @guard
     def _on_highlight_clicked(self) -> None:
         """Build the sorted edge list and show the deepest path (rank 1)."""
         if not self._build_sorted_edges():
@@ -1589,6 +1691,7 @@ class HighLevelPathWidget(QWidget):
         self._current_idx = 0
         self._highlight_at_index()
 
+    @guard
     def _on_next_clicked(self) -> None:
         """Step to the next deepest path."""
         if not self._sorted_edges:
@@ -1601,6 +1704,7 @@ class HighLevelPathWidget(QWidget):
             )
         self._highlight_at_index()
 
+    @guard
     def _on_reset_clicked(self) -> None:
         """Restore the default uniform blue colormap."""
         try:

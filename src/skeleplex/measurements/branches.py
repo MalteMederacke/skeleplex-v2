@@ -65,10 +65,13 @@ def filter_and_segment_lumen(
 
     Eccentricity is defined as the ratio of the distance between the foci of the
     ellipse and the length of the major axis. A value close to 0 indicates a circle
-    and a value close to 1 indicates a line. Circularity is defined as the ratio
-    of the area of the shape to the area of a circle with the same perimeter. A
+    and a value close to 1 indicates a line. 
+    Large values relax the filtering, while small values make it more strict. See
+
+    Circularity is defined as the ratio of the area of the shape to the area of a circle with the same perimeter. A
     value close to 1 indicates a circle and a value close to 0 indicates a
     very irregular/bumpy shape.
+    Small values relax the filtering, while large values make it more strict. See
 
     https://en.wikipedia.org/wiki/Eccentricity_(mathematics)
 
@@ -513,7 +516,7 @@ def add_file_to_graph(file ,
             image_slices = f["image"][:]
             segmentation_slices = f["segmentation"][:]
             pixel_spacing_um = float(f.attrs.get("sample_grid_spacing_um", 1.0))
-            if pixel_spacing_um == 1.0:
+            if f.attrs.get("sample_grid_spacing_um") is None:
                 logger.warning(
                     f"Pixel spacing not found in {file}, defaulting to 1.0 um."
                 )
