@@ -39,6 +39,20 @@ def load_normal_field_model(checkpoint_path: Path | str) -> _AnyModel:
     )
 
 
+def _resolve_device(device: str | torch.device | None) -> torch.device:
+    """Return the requested device, or the best available one if None.
+
+    Auto-detection prefers CUDA, then Apple MPS, then CPU.
+    """
+    if device is not None:
+        return torch.device(device)
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 # ---------------------------------------------------------------------------
 # Single-volume inference
 # ---------------------------------------------------------------------------
@@ -52,6 +66,7 @@ def skeletonize(
     stitching_mode: str = "gaussian",
     progress_bar: bool = True,
     batch_size: int = 1,
+    device: str | torch.device | None = None,
 ) -> np.ndarray:
     """Skeletonize an image using sliding-window inference.
 
@@ -76,6 +91,9 @@ def skeletonize(
         Show inference progress. Default True.
     batch_size : int
         Tiles per forward pass. Default 1.
+    device : str, torch.device or None
+        Device for inference, e.g. "cuda", "mps" or "cpu". The model is moved
+        to this device. If None, CUDA is used if available, then MPS, then CPU.
 
     Returns
     -------
@@ -92,10 +110,12 @@ def skeletonize(
     if model == "pretrained":
         model = get_skeletonization_model()
 
+    device = _resolve_device(device)
+    model.to(device)
     model.eval()
     inferer = SlidingWindowInfererAdapt(
         roi_size=roi_size,
-        sw_device=torch.device("cuda"),
+        sw_device=device,
         sw_batch_size=batch_size,
         overlap=overlap,
         mode=stitching_mode,
@@ -109,7 +129,8 @@ def skeletonize(
 
     del tensor, result
     gc.collect()
-    torch.cuda.empty_cache()
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
 
     return skel_pred
 
@@ -128,6 +149,7 @@ def skeletonize_chunkwise(
     overlap: float = 0.5,
     stitching_mode: str = "gaussian",
     batch_size: int = 1,
+    device: str | torch.device | None = None,
 ) -> da.Array:
     """Skeletonize a large volume chunk by chunk.
 
@@ -154,6 +176,8 @@ def skeletonize_chunkwise(
         Stitching mode for overlapping patches.
     batch_size : int
         Sliding-window batch size.
+    device : str, torch.device or None
+        Device for inference. See ``skeletonize``.
 
     Returns
     -------
@@ -201,6 +225,7 @@ def skeletonize_chunkwise(
                     stitching_mode=stitching_mode,
                     progress_bar=False,
                     batch_size=batch_size,
+                    device=device,
                 )
 
                 cz0 = z_start - z0
