@@ -9,6 +9,7 @@ import zarr
 from skimage.morphology import skeletonize as sk_skeletonize
 
 from skeleplex.skeleton import repair_breaks_lazy
+from skeleplex.skeleton._chunked_label import label_and_merge
 from skeleplex.skeleton.fusion.scale_image import pad_to_match
 from skeleplex.skeleton.fusion.tree_fusion import fused_tree_generator
 from skeleplex.utils._chunked import iteratively_process_chunks_3d
@@ -22,8 +23,8 @@ from _constants import (
     INPUT_IMAGE_PATH,
     SCALE_MAP_PROCESSED_PATH,
     SCALE_RANGES_MANUAL,
-    SKELETONIZED_LABELS_ON_SCALES_ZARR,
     SKELETONIZED_RESCALED_ZARR,
+    TMP_DIR,
 )
 
 scale_ranges_manual = SCALE_RANGES_MANUAL
@@ -62,13 +63,24 @@ print(f"--- Generating optimal tree took {time.time() - start_time2} seconds ---
 
 lung_image_optimum = da.from_zarr(FUSED_TREE_PATH)
 
+# Label the connected components of the fused tree, so that the repair only
+# bridges fragments that are not yet connected
+FUSED_TREE_LABELS_PATH = f"{FUSED_TREE_PATH}_labels"
+label_and_merge(
+    input_path=FUSED_TREE_PATH,
+    output_path=FUSED_TREE_LABELS_PATH,
+    tmp_dir=f"{TMP_DIR}/label_fused_tree",
+    chunk_shape=(256, 256, 256),
+    backend="cupy",
+)
+
 # Repair breaks in the final skeleton
 start_time5 = time.time()
 repair_breaks_lazy(
     skeleton_path=FUSED_TREE_PATH,
     segmentation_path=INPUT_IMAGE_PATH,
     output_path=FINAL_SKELETON_PATH,
-    label_map_path = SKELETONIZED_LABELS_ON_SCALES_ZARR + "/scale-1", #OR WHATEVER THE FINEST SCALE NUMBER IS
+    label_map_path=FUSED_TREE_LABELS_PATH,
     repair_radius=50,
     chunk_shape=(512, 512, 512),
     backend="cupy",

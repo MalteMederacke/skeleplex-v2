@@ -106,10 +106,19 @@ JOB_2_4=$(sbatch --parsable \
 echo "  2_4_fusion_p submitted: $JOB_2_4  (max ${MAX_TASKS} tasks)"
 
 # -----------------------------------------------------------------------
+# Part 2.4.5 — label components and repair breaks (one task per scale)
+# -----------------------------------------------------------------------
+JOB_2_45=$(sbatch --parsable \
+    --dependency=afterok:$JOB_2_4 \
+    --array=$ARRAY_RANGE \
+    2_4_5_repair_breaks_submission.sh)
+echo "  2_4_5_repair submitted: $JOB_2_45  (array $ARRAY_RANGE)"
+
+# -----------------------------------------------------------------------
 # Part 2.5 — upscale (one task per scale, unchanged)
 # -----------------------------------------------------------------------
 JOB_2_5=$(sbatch --parsable \
-    --dependency=afterok:$JOB_2_4 \
+    --dependency=afterok:$JOB_2_45 \
     --array=$ARRAY_RANGE \
     2_5_fusion_submission.sh)
 echo "  2_5_fusion submitted:   $JOB_2_5  (array $ARRAY_RANGE)"
@@ -132,5 +141,6 @@ echo "  prepare_phase2 : $JOB_PREP2"
 echo "  2_2_fusion_p   : $JOB_2_2"
 echo "  2_3_fusion_p   : $JOB_2_3"
 echo "  2_4_fusion_p   : $JOB_2_4"
+echo "  2_4_5_repair   : $JOB_2_45"
 echo "  2_5_fusion     : $JOB_2_5"
 echo "  3_fusion       : $JOB_3"
