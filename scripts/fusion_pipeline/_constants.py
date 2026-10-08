@@ -28,6 +28,10 @@ DISTANCE_FIELD_TYPE = 'normal_field'  # ADAPT HERE — 'distance_field' or 'norm
 
 CHECKPOINT_PATH = "reg-best.ckpt"  # ADAPT HERE — path to model checkpoint
 
+# Sliding-window tile size for skeleton prediction (step 2_3).
+# ADAPT HERE — reduce if the GPU runs out of memory
+ROI_SIZE = (192, 192, 192)
+
 # ============================================================
 # DERIVED PATHS — do not edit
 # All intermediate outputs live inside one zarr container.

@@ -22,6 +22,7 @@ from _constants import (
     CHECKPOINT_PATH,
     DISTANCE_FIELD_TYPE,
     DISTANCE_FIELD_ZARR,
+    ROI_SIZE,
     SKELETON_PREDICTIONS_ZARR,
 )
 from _parallel_utils import get_slices_for_chunk, write_batch_marker
@@ -64,7 +65,7 @@ for chunk_id in range(start, end):
     else:
         field = input_zarrs[scale_number][expanded]
 
-    result = skeletonize(field, model=model, roi_size=(192, 192, 192), progress_bar=False)
+    result = skeletonize(field, model=model, roi_size=ROI_SIZE, progress_bar=False)
     output_zarrs[scale_number][core_out] = result[core_in_result]
     print(f"  chunk {chunk_id} (scale {scale_number}) done ({chunk_id - start + 1}/{end - start})")
 
