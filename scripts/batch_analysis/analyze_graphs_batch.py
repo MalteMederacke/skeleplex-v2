@@ -1,6 +1,7 @@
 """Batch analysis pipeline: curated graphs -> measurements -> CSV.
 
-For each graph in GRAPHS_FIXED_DIR (falling back to GRAPHS_DIR if absent):
+For each graph found by the layout module (the curated copy in graphs_fixed/
+when there is one, else the raw graph):
   1. Load graph; skip if origin not set
   2. Prune degree-2 nodes (iterative)
   3. Length-prune short leaf edges
@@ -17,7 +18,10 @@ Graphs are built in the segmentation's coordinate space, so slices are sampled
 from the matching image / segmentation arrays (the cropped variants when
 present) to stay aligned.
 
-Skip samples whose final graph JSON already exists (unless OVERWRITE).
+A sample segmented on several channels is measured ONCE, on the best channel
+available; anything curated out is skipped (see ``exclusions.py``).
+
+Skips samples whose final graph JSON already exists (unless --overwrite).
 """
 
 import argparse
@@ -45,79 +49,118 @@ sys.path.insert(0, str(Path(__file__).parent))
 from _constants import (  # noqa: E402
     APPROX,
     CIRCULARITY_THRESHOLD,
-    CSVS_DIR,
     ECCENTRICITY_THRESHOLD,
-    GRAPHS_DIR,
-    GRAPHS_FINAL_DIR,
-    GRAPHS_FIXED_DIR,
     LENGTH_PRUNE_THRESHOLD,
     NUM_WORKERS,
-    PROJECT_ROOT,
     SAMPLE_GRID_SPACING_UM,
+    SAMPLE_METADATA,
     SAMPLE_POSITIONS,
     SLICE_SIZE_UM,
     SLICE_SPACING,
-    ZARR_DIR,
+)
+from _layout import (  # noqa: E402
+    csvs_dir,
+    find_graphs,
+    graphs_final_dir,
+    image_key_in,
+    rel,
 )
 
 
 # ─── Metadata parsing ────────────────────────────────────────────────────────
 
-def sample_metadata(stem: str) -> dict:
+def sample_metadata(stem: str, sample) -> dict:
     """Metadata columns to attach to every row of a sample's CSV.
 
-    Override this to parse experiment metadata (genotype, condition, timepoint,
-    ...) out of the sample name. The default just records the sample name.
+    Set SAMPLE_METADATA in your config to a function of (stem, sample) to parse
+    experiment metadata out of the sample name or its directory. The default
+    just records the sample name.
 
-    Example — parse a Wnt11-KO genotype axis::
+    ``sample`` is the :class:`_layout.Sample`, so ``sample.sample_dir.name`` is
+    the condition directory in the nested layout and ``sample.channel`` is the
+    channel the segmentation came from.
 
-        s = stem.lower()
-        genotype = (
-            "het" if "het" in s else
-            "MUT" if "mut" in s else
-            "WT" if "wt" in s else "unknown"
-        )
-        return {"sample": stem, "genotype": genotype}
+    Example — a treatment screen whose condition directories are named
+    ``Ctrl``, ``LatA_1uM``, ``CNF100ng``::
+
+        import re
+
+        def SAMPLE_METADATA(stem, sample):
+            condition = sample.sample_dir.name
+            if "_" in condition:
+                treatment, concentration = condition.split("_", 1)
+            else:
+                m = re.match(r"([A-Za-z]+)(\\d+.*)?", condition)
+                treatment = m.group(1) if m else condition
+                concentration = (m.group(2) or "") if m else ""
+            m = re.search(r"sample(\\d+)", stem)
+            return {
+                "sample": stem,
+                "condition": condition,
+                "treatment": treatment,
+                "concentration": concentration,
+                "sample_number": int(m.group(1)) if m else 0,
+            }
     """
-    return {"sample": stem}  # ADAPT HERE
+    if SAMPLE_METADATA is not None:
+        return SAMPLE_METADATA(stem, sample)
+    return {"sample": stem}
 
 
-# ─── Graph discovery ─────────────────────────────────────────────────────────
+def output_keys(refs):
+    """Map each graph ref to a filename-safe key, unique across the whole run.
 
-def find_graphs() -> list[Path]:
-    """Collect graphs from GRAPHS_DIR, preferring the curated GRAPHS_FIXED_DIR copy."""
-    found = []
-    for gp in sorted(GRAPHS_DIR.glob("*_graph.json")):
-        fixed = GRAPHS_FIXED_DIR / gp.name
-        found.append(fixed if fixed.exists() else gp)
-    return found
+    Stems are normally unique acquisition names, but in the nested layout
+    nothing stops two conditions from holding the same stem — and the CSV
+    directory is shared, so equal stems would silently overwrite each other's
+    table and drop a sample from the combined CSV. Only the colliding stems get
+    qualified with their condition, so ordinary runs keep their plain names.
+    """
+    counts = {}
+    for ref in refs:
+        counts[ref.sample.stem] = counts.get(ref.sample.stem, 0) + 1
+
+    keys = {}
+    for ref in refs:
+        stem = ref.sample.stem
+        if counts[stem] > 1:
+            keys[ref.path] = f"{ref.sample.sample_dir.name}_{stem}"
+        else:
+            keys[ref.path] = stem
+    return keys
 
 
 # ─── Core processing ─────────────────────────────────────────────────────────
 
-def process_graph(graph_path: Path, overwrite: bool) -> None:
-    stem = graph_path.stem[: -len("_graph")]  # strip trailing _graph
-    metadata = sample_metadata(stem)
+def process_graph(ref, key: str, overwrite: bool) -> None:
+    """Measure one graph and write its final graph JSON and CSV."""
+    graph_path = ref.path
+    sample = ref.sample
+    stem = sample.stem
+    metadata = sample_metadata(stem, sample)
 
     print(f"  sample    : {stem}")
+    print(f"  channel   : {sample.channel}")
     print(f"  metadata  : {metadata}")
 
     # Output paths
-    GRAPHS_FINAL_DIR.mkdir(parents=True, exist_ok=True)
-    pruned_graph_path = GRAPHS_FINAL_DIR / f"{stem}_graph_pruned.json"
-    final_graph_path = GRAPHS_FINAL_DIR / f"{stem}_graph_final.json"
+    final_dir = graphs_final_dir(sample)
+    final_dir.mkdir(parents=True, exist_ok=True)
+    pruned_graph_path = final_dir / f"{stem}_graph_pruned.json"
+    final_graph_path = final_dir / f"{stem}_graph_final.json"
 
-    slices_dir = GRAPHS_FINAL_DIR / "slices" / stem
-    slices_filt_dir = GRAPHS_FINAL_DIR / "slices_filt" / stem
+    slices_dir = final_dir / "slices" / stem
+    slices_filt_dir = final_dir / "slices_filt" / stem
 
-    CSVS_DIR.mkdir(parents=True, exist_ok=True)
-    csv_path = CSVS_DIR / f"{stem}_final.csv"
+    out_csv_dir = csvs_dir()
+    out_csv_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = out_csv_dir / f"{key}_final.csv"
 
     if overwrite:
         for d in (slices_dir, slices_filt_dir):
             if d.exists():
                 shutil.rmtree(d)
-                print(f"  [overwrite] removed {d.relative_to(PROJECT_ROOT)}")
+                print(f"  [overwrite] removed {rel(d)}")
 
     if final_graph_path.exists() and not overwrite:
         print(f"  [skip] final graph exists: {final_graph_path.name}")
@@ -131,7 +174,7 @@ def process_graph(graph_path: Path, overwrite: bool) -> None:
         return
 
     voxel_size_um = graph.voxel_size_um
-    prefix = f"{stem}_"
+    prefix = f"{key}_"
     print(f"  origin    : {origin}")
     print(f"  voxel_size: {voxel_size_um}")
 
@@ -174,26 +217,32 @@ def process_graph(graph_path: Path, overwrite: bool) -> None:
     # Save pruned graph so add_measurements_from_h5_to_graph can load it
     graph.to_json_file(str(pruned_graph_path))
 
-    # ── 4. Find zarr for image + segmentation (cropped, to match graph) ───────
-    zarr_path = ZARR_DIR / f"{stem}.zarr"
+    # ── 4. Image + segmentation arrays (cropped, to match the graph) ─────────
+    zarr_path = sample.zarr_path
     if not zarr_path.exists():
-        print(f"  ERROR: no zarr found for {stem}")
+        print(f"  ERROR: no zarr found for {stem} at {zarr_path}")
         return
-    img_key = "image_cropped" if (zarr_path / "image_cropped").exists() else "image"
+
+    import zarr as _zarr
+    store = _zarr.open(str(zarr_path), mode="r")
+    img_key = (
+        "image_cropped" if "image_cropped" in store
+        else image_key_in(store, sample.channel)
+    )
     seg_key = (
-        "segmentation_cropped"
-        if (zarr_path / "segmentation_cropped").exists()
+        "segmentation_cropped" if "segmentation_cropped" in store
         else "segmentation"
     )
     volume_path = str(zarr_path / img_key)
     segmentation_path = str(zarr_path / seg_key)
+    print(f"  arrays    : {img_key} / {seg_key}")
 
     # ── 5. Sample slices ─────────────────────────────────────────────────────
     if slices_dir.exists() and any(slices_dir.iterdir()):
-        print(f"  slices already sampled, skipping ({slices_dir})")
+        print(f"  slices already sampled, skipping ({rel(slices_dir)})")
     else:
         slices_dir.mkdir(parents=True, exist_ok=True)
-        print(f"  sampling slices → {slices_dir}")
+        print(f"  sampling slices → {rel(slices_dir)}")
         slice_dict, seg_slice_dict = graph.sample_volume_slices_from_spline_parallel(
             volume_path=volume_path,
             segmentation_path=segmentation_path,
@@ -215,10 +264,10 @@ def process_graph(graph_path: Path, overwrite: bool) -> None:
 
     # ── 6. Filter slices ──────────────────────────────────────────────────────
     if slices_filt_dir.exists() and any(slices_filt_dir.iterdir()):
-        print(f"  filtered slices already exist, skipping ({slices_filt_dir})")
+        print(f"  filtered slices already exist, skipping ({rel(slices_filt_dir)})")
     else:
         slices_filt_dir.mkdir(parents=True, exist_ok=True)
-        print(f"  filter_and_segment_lumen → {slices_filt_dir}")
+        print(f"  filter_and_segment_lumen → {rel(slices_filt_dir)}")
         filter_and_segment_lumen(
             data_path=str(slices_dir),
             save_path=str(slices_filt_dir),
@@ -255,17 +304,17 @@ def process_graph(graph_path: Path, overwrite: bool) -> None:
 
     # ── 10. Save final graph ──────────────────────────────────────────────────
     graph.to_json_file(str(final_graph_path))
-    print(f"  saved graph → {final_graph_path.relative_to(PROJECT_ROOT)}")
+    print(f"  saved graph → {rel(final_graph_path)}")
 
     # ── 11. CSV ───────────────────────────────────────────────────────────────
     df = graph_attributes_to_df(graph.graph)
     for col, value in metadata.items():
         df[col] = value
     df.to_csv(str(csv_path), index=False)
-    print(f"  saved CSV  → {csv_path.relative_to(PROJECT_ROOT)}")
+    print(f"  saved CSV  → {rel(csv_path)}")
 
 
-def main(overwrite: bool = False) -> None:
+def main(overwrite: bool = False, channels=None) -> None:
     """Measure every curated graph and write per-sample + combined CSVs.
 
     Parameters
@@ -273,42 +322,52 @@ def main(overwrite: bool = False) -> None:
     overwrite : bool
         Re-process samples whose final graph already exists, deleting their
         cached ``slices/`` and ``slices_filt/`` directories first.
+    channels : sequence of str, optional
+        Channel preference order. Defaults to CHANNEL_PRIORITY.
     """
-    graph_paths = find_graphs()
-    if not graph_paths:
-        print(f"No graphs found in {GRAPHS_DIR}. Build skeleton graphs first.")
+    refs = find_graphs(channels=channels)
+    if not refs:
+        print("No graphs found. Build skeleton graphs first.")
         sys.exit(1)
 
-    print(f"Found {len(graph_paths)} graphs.\n")
+    keys = output_keys(refs)
+    n_qualified = sum(1 for r in refs if keys[r.path] != r.sample.stem)
+    n_curated = sum(1 for r in refs if r.curated)
+    print(f"Found {len(refs)} graphs ({n_curated} curated).")
+    if n_qualified:
+        print(
+            f"{n_qualified} share a stem with another sample and were "
+            "qualified with their condition name in the CSV output."
+        )
+    print()
 
     errors = []
-    for graph_path in graph_paths:
-        print(graph_path.name)
+    for ref in refs:
+        print(rel(ref.path))
         try:
-            process_graph(graph_path, overwrite=overwrite)
+            process_graph(ref, keys[ref.path], overwrite=overwrite)
         except Exception as e:
             print(f"  ERROR: {e}")
             traceback.print_exc()
-            errors.append((graph_path, e))
+            errors.append((ref, e))
         print()
 
     # Merge all per-sample CSVs into one combined file
-    csv_files = sorted(CSVS_DIR.glob("*_final.csv"))
+    out_csv_dir = csvs_dir()
+    csv_files = sorted(out_csv_dir.glob("*_final.csv"))
     if csv_files:
         combined = pd.concat([pd.read_csv(f) for f in csv_files], ignore_index=True)
-        combined_path = CSVS_DIR / "all_samples_combined.csv"
+        combined_path = out_csv_dir / "all_samples_combined.csv"
         combined.to_csv(str(combined_path), index=False)
-        print(
-            f"Combined CSV ({len(combined)} rows) → "
-            f"{combined_path.relative_to(PROJECT_ROOT)}"
-        )
+        print(f"Combined CSV ({len(combined)} rows) → {rel(combined_path)}")
 
-    n = len(graph_paths)
+    n = len(refs)
     print(f"\nDone. {n - len(errors)}/{n} processed.")
     if errors:
         print("Errors:")
-        for p, e in errors:
-            print(f"  {p.name}: {e}")
+        for ref, e in errors:
+            print(f"  {rel(ref.path)}: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
@@ -317,5 +376,9 @@ if __name__ == "__main__":
         "--overwrite", action="store_true",
         help="Re-process samples whose final graph already exists.",
     )
+    parser.add_argument(
+        "--channel", action="append", dest="channels",
+        help="Channel preference order (repeatable). Defaults to CHANNEL_PRIORITY.",
+    )
     args = parser.parse_args()
-    main(overwrite=args.overwrite)
+    main(overwrite=args.overwrite, channels=args.channels)

@@ -1,15 +1,20 @@
 """Skeleplex-based browser for reviewing and curating skeleton graphs.
 
 Widget (added to the skeleplex viewer):
-  Prev / Next            : cycle through all <GRAPHS_DIR>/<name>_graph.json files
-                           (loads the graph + matching <ZARR_DIR>/<name>.zarr,
-                           showing the segmentation the graph was built on)
+  Prev / Next            : cycle through every graph found by the layout module
+                           (loads the graph plus the segmentation zarr it was
+                           built on, so the two are always aligned)
   Origin node ID         : node id to use as origin — accepts a bare int (322)
                            or a single-element set as typed ({322})
   Set origin & direct    : keep only the connected component that contains the
                            origin, call graph.to_directed(origin), and update
                            the viewer in place
-  Save to graphs_fixed/  : write the (possibly directed) graph to GRAPHS_FIXED_DIR
+  Save to graphs_fixed/  : write the (possibly directed) graph beside its
+                           sample, where every later stage picks it up in
+                           preference to the raw graph
+
+A graph already curated is reloaded from graphs_fixed/ rather than from the raw
+graph, so re-opening the browser shows your previous work.
 
 Usage:
     python review_graphs.py
@@ -36,31 +41,13 @@ from skeleplex.app._data import ImageFile, SkeletonGraphFile  # noqa: F401
 from skeleplex.graph.skeleton_graph import SkeletonGraph
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _constants import (  # noqa: E402
-    DEFAULT_VOXEL_SIZE_UM,
-    GRAPHS_DIR,
-    GRAPHS_FIXED_DIR,
-    ZARR_DIR,
-)
+from _constants import DEFAULT_VOXEL_SIZE_UM  # noqa: E402
+from _layout import find_graphs, graphs_fixed_dir, rel  # noqa: E402
 
 
 def seg_array_key(store) -> str:
     """Segmentation array matching the graph coordinate space (cropped if present)."""
     return "segmentation_cropped" if "segmentation_cropped" in store else "segmentation"
-
-
-def find_graph_zarr_pairs():
-    """Return sorted list of (graph_json_path, zarr_path_or_None) tuples."""
-    pairs = []
-    for graph_path in sorted(GRAPHS_DIR.glob("*_graph.json")):
-        # prefer a previously curated graph in graphs_fixed/
-        fixed_path = GRAPHS_FIXED_DIR / graph_path.name
-        load_path = fixed_path if fixed_path.exists() else graph_path
-        # graphs/<name>_graph.json -> zarr/<name>.zarr
-        stem = graph_path.stem[: -len("_graph")]
-        zarr_path = ZARR_DIR / f"{stem}.zarr"
-        pairs.append((load_path, zarr_path if zarr_path.exists() else None))
-    return pairs
 
 
 def guard(method):
@@ -109,10 +96,10 @@ def update_segmentation_in_viewer(
 
 
 class GraphBrowser(QWidget):
-    def __init__(self, app, pairs: list):
+    def __init__(self, app, refs: list):
         super().__init__()
         self.app = app
-        self.pairs = pairs
+        self.refs = refs
         self.index = 0
         self._graph: SkeletonGraph | None = None
 
@@ -158,18 +145,25 @@ class GraphBrowser(QWidget):
         self.setLayout(layout)
         self._load_current()
 
+    @property
+    def ref(self):
+        return self.refs[self.index]
+
     def _update_title(self):
-        graph_path, zarr_path = self.pairs[self.index]
-        zarr_ok = "✓ seg" if zarr_path and zarr_path.exists() else "✗ no seg"
-        fixed = " [fixed]" if "graphs_fixed" in graph_path.parts else ""
+        ref = self.ref
+        zarr_path = ref.sample.zarr_path
+        zarr_ok = "✓ seg" if zarr_path.exists() else "✗ no seg"
+        fixed = " [fixed]" if ref.curated else ""
         self.title_label.setText(
-            f"[{self.index + 1}/{len(self.pairs)}] {zarr_ok}{fixed}\n{graph_path.name}"
+            f"[{self.index + 1}/{len(self.refs)}] {zarr_ok}{fixed}\n"
+            f"{rel(ref.path)}"
         )
 
     @guard
     def _load_current(self):
         self.status.setText("")
-        graph_path, zarr_path = self.pairs[self.index]
+        graph_path = self.ref.path
+        zarr_path = self.ref.sample.zarr_path
 
         # Load graph
         try:
@@ -191,7 +185,7 @@ class GraphBrowser(QWidget):
         self.app.look_at_skeleton()
 
         # Load matching segmentation (aligned with the graph)
-        if zarr_path and zarr_path.exists():
+        if zarr_path.exists():
             import zarr as _zarr
             store = _zarr.open(str(zarr_path))
             voxel_size = list(
@@ -213,7 +207,7 @@ class GraphBrowser(QWidget):
 
     @guard
     def next(self):
-        if self.index < len(self.pairs) - 1:
+        if self.index < len(self.refs) - 1:
             self.index += 1
             self._load_current()
 
@@ -259,25 +253,28 @@ class GraphBrowser(QWidget):
         if self._graph is None:
             self.status.setText("No graph loaded.")
             return
-        graph_path, _ = self.pairs[self.index]
-        GRAPHS_FIXED_DIR.mkdir(parents=True, exist_ok=True)
-        out_path = GRAPHS_FIXED_DIR / graph_path.name
+        ref = self.ref
+        out_dir = graphs_fixed_dir(ref.sample)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / ref.path.name
         self._graph.to_json_file(str(out_path))
-        self.status.setText(f"Saved → graphs_fixed/{out_path.name}")
+        self.status.setText(f"Saved → {rel(out_path)}")
 
 
 def main():
-    pairs = find_graph_zarr_pairs()
-    if not pairs:
-        print(f"No *_graph.json files found in {GRAPHS_DIR}")
+    refs = find_graphs()
+    if not refs:
+        print("No *_graph.json files found. Run segmentation_to_graph_batch.py first.")
         sys.exit(1)
-    print(f"Found {len(pairs)} graphs.")
+    n_curated = sum(1 for r in refs if r.curated)
+    print(f"Found {len(refs)} graphs ({n_curated} already curated).")
 
-    # Bootstrap viewer with the first graph (and seg if available)
-    first_graph, first_zarr = pairs[0]
+    # Bootstrap viewer with the first graph (and its segmentation if available)
+    first = refs[0]
+    first_zarr = first.sample.zarr_path
     seg_path = None
     seg_voxel = tuple(DEFAULT_VOXEL_SIZE_UM)
-    if first_zarr and first_zarr.exists():
+    if first_zarr.exists():
         import zarr as _zarr
         store = _zarr.open(str(first_zarr))
         voxel_size = list(
@@ -287,12 +284,12 @@ def main():
         seg_voxel = tuple(voxel_size)
 
     app = view_skeleton(
-        graph_path=str(first_graph),
+        graph_path=str(first.path),
         segmentation_path=seg_path,
         segmentation_voxel_size_um=seg_voxel,
     )
 
-    widget = GraphBrowser(app, pairs)
+    widget = GraphBrowser(app, refs)
     app.add_auxiliary_widget(widget, name="Graph Browser")
 
     skeleplex.app.run()
