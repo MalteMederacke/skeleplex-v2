@@ -1095,7 +1095,7 @@ def make_split_edge_widget(viewer):
         edge_key = next(
             iter(edge_string_to_key(split_edge_widget.edge_to_split_ID.value))
         )
-        u, v = edge_key[0], edge_key[1]
+        _ , v = edge_key[0], edge_key[1]
         skeleton_graph = viewer.curate._data.skeleton_graph
         viewer.curate._undo_buffer.push(deepcopy(skeleton_graph))
 
