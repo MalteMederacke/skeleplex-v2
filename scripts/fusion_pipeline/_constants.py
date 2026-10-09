@@ -28,6 +28,17 @@ DISTANCE_FIELD_TYPE = 'normal_field'  # ADAPT HERE — 'distance_field' or 'norm
 
 CHECKPOINT_PATH = "reg-best.ckpt"  # ADAPT HERE — path to model checkpoint
 
+# Largest half-width of the maximum filter that normalises the distance field
+# (step 2_2). The filter uses half the largest branch radius of each connected
+# component, capped at this value. Also sets the chunk border of step 2_2.
+MAX_BALL_RADIUS = 30  # ADAPT HERE
+
+# Which bridges the break repair draws (steps 2_4_5 and 3).
+# "tree": only between fragments that are not yet connected, so that no bridge
+#         closes a loop; "pair": at most one bridge between any two fragments;
+# "all":  one bridge per end point (can close loops).
+REPAIR_BRIDGING = "tree"  # ADAPT HERE
+
 # Sliding-window tile size for skeleton prediction (step 2_3).
 # ADAPT HERE — reduce if the GPU runs out of memory
 ROI_SIZE = (192, 192, 192)

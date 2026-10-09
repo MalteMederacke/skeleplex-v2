@@ -16,12 +16,15 @@ import numpy as np
 import pandas as pd
 import zarr
 
+from skeleplex.skeleton.fusion.scale_map import SCALE_MAP_BACKGROUND
+
 # isort: split
 sys.path.insert(0, str(Path(__file__).parent))
 from _constants import (
     DISTANCE_FIELD_TYPE,
     DISTANCE_FIELD_ZARR,
     INPUT_IMAGE_PATH,
+    MAX_BALL_RADIUS,
     RADIUS_MAP_PATH,
     SCALE_MAP_PATH,
     SCALE_MAP_PROCESSED_PATH,
@@ -60,7 +63,7 @@ def _save_df(df: pd.DataFrame, path: Path, force: bool) -> None:
     df.to_csv(path, index=False)
     print(f"  Written {len(df)} rows → {path}")
 
-def _open_or_create_zarr(path: str, shape, chunks, dtype) -> None:
+def _open_or_create_zarr(path: str, shape, chunks, dtype, fill_value=0) -> None:
     try:
         z = zarr.open_array(path, mode="r")
         if z.shape == shape:
@@ -69,7 +72,9 @@ def _open_or_create_zarr(path: str, shape, chunks, dtype) -> None:
     except (FileNotFoundError, KeyError, zarr.errors.NodeTypeValidationError):
         pass
 
-    zarr.open_array(path, mode="w", shape=shape, chunks=chunks, dtype=dtype)
+    zarr.open_array(
+        path, mode="w", shape=shape, chunks=chunks, dtype=dtype, fill_value=fill_value
+    )
     print(f"  Created zarr {shape} @ {path}")
 
 def prepare_phase1(force: bool) -> None:
@@ -88,12 +93,24 @@ def prepare_phase1(force: bool) -> None:
     # --- 1_2: scale map (input = radius map, same shape) ---
     df = get_chunking_df(img, shape, PROC_CHUNK["1_2"], (10, 10, 10))
     _save_df(df, CSV_DIR / "step_1_2.csv", force)
-    _open_or_create_zarr(SCALE_MAP_PATH, shape, STORAGE_CHUNK, np.float32)
+    _open_or_create_zarr(
+        SCALE_MAP_PATH,
+        shape,
+        STORAGE_CHUNK,
+        np.float32,
+        fill_value=SCALE_MAP_BACKGROUND,
+    )
 
     # --- 1_3: processed scale map ---
     df = get_chunking_df(img, shape, PROC_CHUNK["1_3"], (20, 20, 20))
     _save_df(df, CSV_DIR / "step_1_3.csv", force)
-    _open_or_create_zarr(SCALE_MAP_PROCESSED_PATH, shape, STORAGE_CHUNK, np.float32)
+    _open_or_create_zarr(
+        SCALE_MAP_PROCESSED_PATH,
+        shape,
+        STORAGE_CHUNK,
+        np.float32,
+        fill_value=SCALE_MAP_BACKGROUND,
+    )
 
 
 def prepare_phase2(force: bool) -> None:
@@ -115,12 +132,14 @@ def prepare_phase2(force: bool) -> None:
         s = scaled.shape
         print(f"  scale={scale}, shape={s}")
 
-        # 2_2: distance / normal field — border (10,10,10)
+        # 2_2: distance / normal field — the border must cover the normalisation
+        # filter of the distance field (normal field: 10 voxels as before)
         _is_normal = DISTANCE_FIELD_TYPE == "normal_field"
+        border_22 = (10, 10, 10) if _is_normal else (MAX_BALL_RADIUS + 10,) * 3
         chunk_22 = (3, *STORAGE_CHUNK) if _is_normal else STORAGE_CHUNK
         out_shape_22 = (3, *s) if _is_normal else s
         df = get_chunking_df(
-            scaled, out_shape_22, PROC_CHUNK["2_2"], (10, 10, 10), scale_number=scale
+            scaled, out_shape_22, PROC_CHUNK["2_2"], border_22, scale_number=scale
         )
         dfs_22.append(df)
         _open_or_create_zarr(

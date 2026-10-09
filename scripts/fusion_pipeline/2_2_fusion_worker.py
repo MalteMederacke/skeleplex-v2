@@ -15,7 +15,12 @@ from skeleplex.skeleton.distance_field import (
 
 # isort: split
 sys.path.insert(0, str(Path(__file__).parent))
-from _constants import DISTANCE_FIELD_TYPE, DISTANCE_FIELD_ZARR, SCALED_IMAGE_ZARR
+from _constants import (
+    DISTANCE_FIELD_TYPE,
+    DISTANCE_FIELD_ZARR,
+    MAX_BALL_RADIUS,
+    SCALED_IMAGE_ZARR,
+)
 from _parallel_utils import get_slices_for_chunk, write_batch_marker
 
 csv_path = sys.argv[1]
@@ -31,7 +36,7 @@ if start >= len(job_df):
     sys.exit(0)
 
 if DISTANCE_FIELD_TYPE == 'distance_field':
-    fn = partial(local_normalized_distance_gpu, max_ball_radius=2)
+    fn = partial(local_normalized_distance_gpu, max_ball_radius=MAX_BALL_RADIUS)
 elif DISTANCE_FIELD_TYPE == 'normal_field':
     fn = partial(inward_unit_normal_field_gpu)
 
