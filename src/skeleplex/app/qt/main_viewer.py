@@ -32,7 +32,6 @@ class MainViewerFrame(QFrame):
         """
         self.layout().addWidget(widget)
 
-
 class ImageControls(FlatVGroupBox):
     """Control UI for the skeleton."""
 
@@ -40,18 +39,15 @@ class ImageControls(FlatVGroupBox):
         super().__init__(
             title="Image Appearance", accent_color="#92a8d7", parent=parent
         )
-
         self.add_widget(QLabel("test"))
 
 
 class SkeletonControls(FlatVGroupBox):
     """Control UI for the skeleton."""
-
     def __init__(self, parent: QWidget):
         super().__init__(
             title="Skeleton Appearance", accent_color="#92a8d7", parent=parent
         )
-
         self.add_widget(QLabel("test"))
 
 
@@ -60,8 +56,10 @@ class MainViewerControls(QWidget):
 
     def __init__(self, parent: QWidget):
         super().__init__(parent=parent)
-        self.skeleton_controls = SkeletonControls(parent=self)
-        self.image_controls = ImageControls(parent=self)
+        #commented out for now, as we don't have any image nor skeleton controls
+
+        # self.skeleton_controls = SkeletonControls(parent=self)
+        # self.image_controls = ImageControls(parent=self)
 
         # set the maximum height
         self.setMaximumHeight(100)
@@ -69,8 +67,10 @@ class MainViewerControls(QWidget):
         # layout
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.image_controls)
-        layout.addWidget(self.skeleton_controls)
+        
+        #commented out for now, as we don't have any image nor skeleton controls
+        # layout.addWidget(self.image_controls)
+        # layout.addWidget(self.skeleton_controls)
         self.setLayout(layout)
 
 

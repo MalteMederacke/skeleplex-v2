@@ -16,6 +16,7 @@
 #   4. review_segmentations.py  segmentation zarrs       -> curated segmentations
 #   5. segmentation_to_graph_batch.py  segmentations     -> skeleton graphs
 #   6. review_graphs.py         graphs + segmentations   -> curated/directed graphs
+#   6b train_loop_breaker.py    curated graphs           -> loop-breaker model for 6
 #   7. analyze_graphs_batch.py  curated graphs           -> measurements CSVs
 #
 # ---------------------------------------------------------------------------
@@ -219,6 +220,8 @@ _DERIVED_FROM_ROOT = {
     "GRAPHS_FIXED_DIR": "graphs_fixed",  # curated in review_graphs.py
     "GRAPHS_FINAL_DIR": "graphs_final",  # measured in analyze_graphs_batch.py
     "CSVS_DIR": "csvs",                # per-sample + combined measurements
+    # learned from curated graphs by train_loop_breaker.py, used by review_graphs.py
+    "LOOP_BREAKER_MODEL": "loop_breaker.joblib",
 }
 
 

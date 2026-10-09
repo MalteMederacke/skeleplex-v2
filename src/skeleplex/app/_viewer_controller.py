@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 import numpy as np
+import pygfx as gfx
 from cellier.controller import CellierController
 from cellier.data.label import LabelMemoryStore
 from cellier.data.lines import LinesMemoryStore
@@ -557,9 +558,33 @@ class ViewerController:
         widget = self._backend.add_canvas(self._scene_id)
         # add_canvas returns the widget; recover the canvas UUID from the scene.
         self._canvas_id = self._backend.get_canvas_ids(self._scene_id)[-1]
+        self._use_trackball_controller()
         self._main_canvas = MainCanvasController(
             scene_id=self._scene_id,
             canvas_id=self._canvas_id,
             backend=self._backend,
         )
         return widget
+
+    def _use_trackball_controller(self) -> None:
+        """Replace the canvas's 3D orbit controller with a trackball controller.
+
+        cellier hardcodes pygfx's ``OrbitController``, which clamps the
+        elevation to +/-89 degrees around the camera's up vector, so the
+        skeleton cannot be flipped over the pole. The trackball controller has
+        the same mouse bindings but rotates freely. cellier has no public hook
+        for this, so it reaches into the private ``CanvasView`` attributes.
+        """
+        canvas_view = self._backend._render_manager._canvases[self._canvas_id]
+        orbit = canvas_view._controller_3d
+        trackball = gfx.TrackballController(
+            camera=canvas_view._camera_3d,
+            enabled=orbit.enabled,
+            register_events=canvas_view._renderer,
+        )
+        # the orbit controller's event handler cannot be unregistered, so
+        # leave it permanently disabled.
+        orbit.enabled = False
+        if canvas_view._controller is orbit:
+            canvas_view._controller = trackball
+        canvas_view._controller_3d = trackball

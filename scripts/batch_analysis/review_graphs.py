@@ -6,6 +6,13 @@ Widget (added to the skeleplex viewer):
                            built on, so the two are always aligned)
   Origin node ID         : node id to use as origin — accepts a bare int (322)
                            or a single-element set as typed ({322})
+  Auto-break loops       : cut one edge per loop in the origin's component,
+                           chosen by the model train_loop_breaker.py learned
+                           from the graphs already curated. Only reads the
+                           origin — the graph stays undirected, so the cuts can
+                           be reviewed and corrected before directing. Cuts the
+                           model was unsure about are marked with a point;
+                           one undo reverts the whole step
   Set origin & direct    : keep only the connected component that contains the
                            origin, call graph.to_directed(origin), and update
                            the viewer in place
@@ -22,10 +29,13 @@ Usage:
 
 import functools
 import sys
+from copy import deepcopy
 import traceback
 from pathlib import Path
 
+import joblib
 import networkx as nx
+import numpy as np
 from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -41,8 +51,9 @@ from skeleplex.app._data import ImageFile, SkeletonGraphFile  # noqa: F401
 from skeleplex.graph.skeleton_graph import SkeletonGraph
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _constants import DEFAULT_VOXEL_SIZE_UM  # noqa: E402
+from _constants import DEFAULT_VOXEL_SIZE_UM, LOOP_BREAKER_MODEL  # noqa: E402
 from _layout import find_graphs, graphs_fixed_dir, rel  # noqa: E402
+from _loop_breaking import UNCERTAIN_BELOW, apply_cuts, plan_cuts  # noqa: E402
 
 
 def seg_array_key(store) -> str:
@@ -77,6 +88,11 @@ def parse_origin_node(text):
 
 def update_graph_in_viewer(graph: SkeletonGraph, app) -> None:
     app.data._skeleton_graph = graph
+    refresh_viewer(app)
+
+
+def refresh_viewer(app) -> None:
+    """Redraw whatever graph the viewer currently holds."""
     app.data._update_node_coordinates()
     app.data._update_edge_coordinates()
     app.data._update_edge_colors()
@@ -101,7 +117,9 @@ class GraphBrowser(QWidget):
         self.app = app
         self.refs = refs
         self.index = 0
-        self._graph: SkeletonGraph | None = None
+        self._loop_model = None
+        # points visual + store marking uncertain automatic cuts, made on first use
+        self._cut_markers = None
 
         layout = QVBoxLayout()
 
@@ -129,6 +147,14 @@ class GraphBrowser(QWidget):
         self.origin_edit.setPlaceholderText("e.g. 456 or {456}")
         layout.addWidget(self.origin_edit)
 
+        btn_break = QPushButton("Auto-break loops (stays undirected)")
+        btn_break.clicked.connect(self.auto_break_loops)
+        layout.addWidget(btn_break)
+
+        btn_hide = QPushButton("Hide cut markers")
+        btn_hide.clicked.connect(self.hide_cut_markers)
+        layout.addWidget(btn_hide)
+
         btn_direct = QPushButton("Set origin & make directed")
         btn_direct.clicked.connect(self.set_origin_and_direct)
         layout.addWidget(btn_direct)
@@ -149,6 +175,18 @@ class GraphBrowser(QWidget):
     def ref(self):
         return self.refs[self.index]
 
+    @property
+    def _graph(self) -> SkeletonGraph | None:
+        # Always read the graph from the viewer. The curation tools edit it in
+        # place, but undo/redo swap in a different object, so a copy kept on
+        # the widget goes stale and later operations would revert the edits.
+        return self.app.data.skeleton_graph
+
+    def _clear_history(self):
+        """Drop undo/redo history so undo can't restore another sample's graph."""
+        self.app.curate._undo_buffer._buffer.clear()
+        self.app.curate._redo_buffer._buffer.clear()
+
     def _update_title(self):
         ref = self.ref
         zarr_path = ref.sample.zarr_path
@@ -167,11 +205,14 @@ class GraphBrowser(QWidget):
 
         # Load graph
         try:
-            self._graph = SkeletonGraph.from_json_file(str(graph_path))
+            graph = SkeletonGraph.from_json_file(str(graph_path))
         except Exception as e:
             self.status.setText(f"ERROR loading graph: {e}")
             self._update_title()
             return
+        update_graph_in_viewer(graph, self.app)
+        self._clear_history()
+        self._show_cut_markers([])
 
         # Update origin edit if graph already has origin stored
         if hasattr(self._graph, "origin") and self._graph.origin is not None:
@@ -181,7 +222,6 @@ class GraphBrowser(QWidget):
         n_edges = self._graph.graph.number_of_edges()
         self.info_label.setText(f"nodes: {n_nodes}  edges: {n_edges}")
 
-        update_graph_in_viewer(self._graph, self.app)
         self.app.look_at_skeleton()
 
         # Load matching segmentation (aligned with the graph)
@@ -211,6 +251,73 @@ class GraphBrowser(QWidget):
             self.index += 1
             self._load_current()
 
+    def _show_cut_markers(self, positions):
+        """Mark the given positions in the viewer; an empty list hides the markers."""
+        if self._cut_markers is None:
+            if len(positions) == 0:
+                return
+            point_size = max(np.max(self.app.data.node_coordinates) * 0.01, 50)
+            self._cut_markers = self.app.add_points(point_size=point_size)
+        visual, store = self._cut_markers
+        if len(positions) > 0:
+            store.positions = np.asarray(positions, dtype=np.float32)
+        visual.appearance.visible = len(positions) > 0
+        self.app._viewer._backend.reslice_all()
+
+    @guard
+    def hide_cut_markers(self):
+        self._show_cut_markers([])
+
+    @guard
+    def auto_break_loops(self):
+        if self._graph is None:
+            self.status.setText("No graph loaded.")
+            return
+        try:
+            origin = parse_origin_node(self.origin_edit.text())
+        except ValueError:
+            self.status.setText("Invalid origin node ID (use e.g. 322 or {322}).")
+            return
+        if self._graph.graph.is_directed():
+            self.status.setText(
+                "Graph is already directed — loops are broken on the undirected "
+                "graph. Undo the directing first."
+            )
+            return
+        if origin not in self._graph.graph:
+            self.status.setText(f"Node {origin} not in graph.")
+            return
+
+        if self._loop_model is None:
+            if not Path(LOOP_BREAKER_MODEL).exists():
+                self.status.setText(
+                    f"No loop-breaker model at {LOOP_BREAKER_MODEL}. "
+                    "Run train_loop_breaker.py first."
+                )
+                return
+            self._loop_model = joblib.load(LOOP_BREAKER_MODEL)
+
+        cuts = plan_cuts(self._graph.graph, origin, self._loop_model)
+        if not cuts:
+            self.status.setText("No loops in the origin's component.")
+            return
+
+        # one undo reverts the whole step
+        self.app.curate._undo_buffer.push(deepcopy(self._graph))
+        apply_cuts(self._graph, cuts, origin)
+        refresh_viewer(self.app)
+
+        uncertain = [c.position for c in cuts if c.confidence < UNCERTAIN_BELOW]
+        self._show_cut_markers(uncertain)
+
+        n_nodes = self._graph.graph.number_of_nodes()
+        n_edges = self._graph.graph.number_of_edges()
+        self.info_label.setText(f"nodes: {n_nodes}  edges: {n_edges}")
+        self.status.setText(
+            f"Cut {len(cuts)} loops from origin {origin}; "
+            f"{len(uncertain)} uncertain cuts marked. Still undirected."
+        )
+
     @guard
     def set_origin_and_direct(self):
         if self._graph is None:
@@ -227,6 +334,9 @@ class GraphBrowser(QWidget):
             self.status.setText(f"Node {origin} not in graph.")
             return
 
+        # make this step undoable like the built-in curation tools
+        self.app.curate._undo_buffer.push(deepcopy(self._graph))
+
         # Keep only the connected component containing origin
         components = list(nx.connected_components(undirected))
         main_comp = next(c for c in components if origin in c)
@@ -240,7 +350,7 @@ class GraphBrowser(QWidget):
             self.status.setText(f"Origin {origin} set.")
 
         self._graph.to_directed(origin)
-        update_graph_in_viewer(self._graph, self.app)
+        refresh_viewer(self.app)
 
         n_nodes = self._graph.graph.number_of_nodes()
         n_edges = self._graph.graph.number_of_edges()
