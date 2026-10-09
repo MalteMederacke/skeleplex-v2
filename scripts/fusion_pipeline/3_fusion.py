@@ -21,6 +21,7 @@ from _constants import (
     FINAL_SKELETON_SKELETONIZED_PATH,
     FUSED_TREE_PATH,
     INPUT_IMAGE_PATH,
+    REPAIR_BRIDGING,
     SCALE_MAP_PROCESSED_PATH,
     SCALE_RANGES_MANUAL,
     SKELETONIZED_RESCALED_ZARR,
@@ -84,6 +85,7 @@ repair_breaks_lazy(
     repair_radius=50,
     chunk_shape=(512, 512, 512),
     backend="cupy",
+    bridging=REPAIR_BRIDGING,
 )
 
 # Thinning / Skeletonizing on the repaired skeleton

@@ -29,6 +29,7 @@ from skeleplex.graph.constants import EDGE_COORDINATES_KEY
 from skeleplex.graph.skeleton_graph import SkeletonGraph
 from skeleplex.graph.utils import draw_line_segment
 from skeleplex.skeleton._break_detection_lazy import repair_fusion_breaks_lazy
+from skeleplex.skeleton.fusion.scale_map import SCALE_MAP_BACKGROUND
 
 
 def rasterize_graph(
@@ -126,6 +127,13 @@ def main() -> None:
         "--backend", choices=["cpu", "cupy"], default="cpu",
         help="Compute backend (default: cpu)."
     )
+    parser.add_argument(
+        "--scale-map-background", type=float, default=SCALE_MAP_BACKGROUND,
+        help=(
+            "Background value of the scale map "
+            f"(default: {SCALE_MAP_BACKGROUND}, as written by the fusion pipeline)."
+        ),
+    )
     args = parser.parse_args()
 
     # ------------------------------------------------------------------ #
@@ -188,6 +196,7 @@ def main() -> None:
         label_map_path=args.label_map,
         endpoint_mask_dilation=args.endpoint_mask_dilation,
         backend=args.backend,
+        background_value=args.scale_map_background,
     )
     print(f"Done. Repaired skeleton at {args.repaired_out}")
 

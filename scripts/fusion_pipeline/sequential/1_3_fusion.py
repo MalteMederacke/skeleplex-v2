@@ -7,7 +7,10 @@ from pathlib import Path
 import dask.array as da
 import zarr
 
-from skeleplex.skeleton.fusion.scale_map import scale_map_processing_gpu
+from skeleplex.skeleton.fusion.scale_map import (
+    SCALE_MAP_BACKGROUND,
+    scale_map_processing_gpu,
+)
 from skeleplex.utils._chunked import iteratively_process_chunks_3d
 
 # isort: split
@@ -37,6 +40,7 @@ save_here = zarr.open(
     shape=lung_image_scale_map.shape,
     chunks=(192, 192, 192),
     dtype=lung_image_scale_map.dtype,
+    fill_value=SCALE_MAP_BACKGROUND,
 )
 
 iteratively_process_chunks_3d(

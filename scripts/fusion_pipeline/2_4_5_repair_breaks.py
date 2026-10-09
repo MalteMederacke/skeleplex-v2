@@ -10,6 +10,7 @@ from skeleplex.skeleton._chunked_label import label_and_merge
 # isort: split
 sys.path.insert(0, str(Path(__file__).parent))
 from _constants import (
+    REPAIR_BRIDGING,
     SCALE_RANGES_MANUAL,
     SCALED_IMAGE_ZARR,
     SKELETONIZED_LABELS_ON_SCALES_ZARR,
@@ -71,6 +72,7 @@ if __name__ == "__main__":
         chunk_shape=(256, 256, 256),
         label_map_path=label_map_path,
         backend="cupy",
+        bridging=REPAIR_BRIDGING,
     )
     print(f"Scale {scale_number}: repair took {time.time() - start_time:.2f}s")
 

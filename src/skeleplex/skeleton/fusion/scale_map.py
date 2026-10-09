@@ -1,6 +1,13 @@
 import numpy as np
 from skimage.morphology import ball
 
+# Value of the scale map outside the segmentation. Scale numbers are small
+# integers (0 is the native resolution, negative values are downscaled, positive
+# values would be upscaled), so the background needs a value that is none of them.
+# It is larger than any scale number so that the minimum filter in
+# ``scale_map_processing_gpu`` never spreads it into the foreground.
+SCALE_MAP_BACKGROUND = 9999
+
 
 
 def radius_map_generator_gpu(
@@ -81,13 +88,23 @@ def scale_map_generator_gpu(radius_map: np.ndarray, scale_ranges: dict) -> np.nd
     ----------
     radius_map : np.ndarray
         Array with non-zero values documenting the radius of each tube.
+        Zero is background.
     scale_ranges : dict
         This dictionary is used to map the scales to the radii in the radius_map.
+        Keys are scale numbers, values are ``(start, end)`` radius ranges with
+        ``start <= radius < end``.
 
     Returns
     -------
     np.ndarray
         Array of same shape as input image, containing scale mapped values.
+        Background voxels have the value ``SCALE_MAP_BACKGROUND``.
+
+    Raises
+    ------
+    ValueError
+        If a scale number is not smaller than ``SCALE_MAP_BACKGROUND``, or if
+        a foreground voxel has a radius outside all ranges.
     """
     try:
         import cupy as cp
@@ -99,14 +116,29 @@ def scale_map_generator_gpu(radius_map: np.ndarray, scale_ranges: dict) -> np.nd
             "installation instructions for your GPU."
         ) from err
 
-    radius_map = cp.asarray(radius_map)
-    mask = radius_map > 0
+    if any(key >= SCALE_MAP_BACKGROUND for key in scale_ranges):
+        raise ValueError(
+            f"Scale numbers must be smaller than {SCALE_MAP_BACKGROUND}, "
+            "which marks the background of the scale map."
+        )
 
-    scale_map = cp.zeros_like(radius_map, dtype=np.float32)
+    radius_map = cp.asarray(radius_map)
+    foreground = radius_map > 0
+
+    scale_map = cp.full(radius_map.shape, SCALE_MAP_BACKGROUND, dtype=np.float32)
 
     for key, (start, end) in scale_ranges.items():
-        mask = (radius_map >= start) & (radius_map < end)
+        mask = foreground & (radius_map >= start) & (radius_map < end)
         scale_map[mask] = key
+
+    unassigned = foreground & (scale_map == SCALE_MAP_BACKGROUND)
+    if bool(unassigned.any()):
+        radii = radius_map[unassigned]
+        raise ValueError(
+            f"{int(unassigned.sum())} foreground voxels with radii between "
+            f"{float(radii.min()):.1f} and {float(radii.max()):.1f} are not covered "
+            f"by the scale ranges {scale_ranges}."
+        )
 
     return cp.asnumpy(scale_map)
 
@@ -130,7 +162,8 @@ def scale_map_processing_gpu(
     image : np.ndarray
         Binary array where non-zero values are interpreted as foreground.
     scale_map : np.ndarray
-        Scale map to be processed
+        Scale map to be processed. Background voxels have the value
+        ``SCALE_MAP_BACKGROUND``.
     radius_map : np.ndarray
         Radius map to be used for local border size estimation.
 
@@ -155,7 +188,9 @@ def scale_map_processing_gpu(
     radius_map_block = cp.asarray(radius_map)
 
     # Apply processing
-    local_min_scale_block = cp.zeros_like(image_block, dtype=cp.float32)
+    local_min_scale_block = cp.full(
+        image_block.shape, SCALE_MAP_BACKGROUND, dtype=cp.float32
+    )
     mask = image_block > 0
 
     masked_radius_map = radius_map_block[mask]

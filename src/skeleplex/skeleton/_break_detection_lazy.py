@@ -7,7 +7,11 @@ import numpy as np
 import zarr
 from tqdm import tqdm
 
-from skeleplex.skeleton._break_detection import repair_breaks, repair_fusion_breaks
+from skeleplex.skeleton._break_detection import (
+    BridgeRegistry,
+    repair_breaks,
+    repair_fusion_breaks,
+)
 from skeleplex.utils import calculate_expanded_slice
 
 
@@ -23,6 +27,9 @@ def repair_breaks_chunk(
     w_distance: float = 1.0,
     w_angle: float = 1.0,
     backend: Literal["cpu", "cupy"] = "cpu",
+    bridging: Literal["all", "pair", "tree"] = "all",
+    bridge_registry: BridgeRegistry | None = None,
+    core_shape: tuple[int, int, int] | None = None,
 ) -> None:
     """Process a single chunk for skeleton break repair.
 
@@ -62,6 +69,16 @@ def repair_breaks_chunk(
     backend : Literal["cpu", "cupy"]
         The computation backend to use.
         Default is "cpu".
+    bridging : {"all", "pair", "tree"}
+        Which of the proposed bridges are drawn, see ``repair_breaks``.
+        Default is "all".
+    bridge_registry : BridgeRegistry or None
+        Registry shared between chunks, see ``repair_breaks``.
+    core_shape : tuple[int, int, int] or None
+        Shape of the core region of the chunk (z, y, x). End points are
+        searched in the core only. If None, the border after the core is
+        assumed to equal ``actual_border``, which is wrong for chunks at
+        the edge of the volume.
 
     Returns
     -------
@@ -80,13 +97,13 @@ def repair_breaks_chunk(
     # Calculate endpoint bounding box within the loaded chunk
     # This restricts endpoint search to the core region
     chunk_shape = skeleton_chunk.shape
+    if core_shape is None:
+        core_end = tuple(chunk_shape[dim] - actual_border[dim] for dim in range(3))
+    else:
+        core_end = tuple(actual_border[dim] + core_shape[dim] for dim in range(3))
     endpoint_bbox = (
         (actual_border[0], actual_border[1], actual_border[2]),
-        (
-            chunk_shape[0] - actual_border[0],
-            chunk_shape[1] - actual_border[1],
-            chunk_shape[2] - actual_border[2],
-        ),
+        core_end,
     )
 
     # Apply repair to full chunk but only search for endpoints in core
@@ -100,11 +117,18 @@ def repair_breaks_chunk(
         w_distance=w_distance,
         w_angle=w_angle,
         backend=backend,
+        bridging=bridging,
+        bridge_registry=bridge_registry,
     )
 
     # Write full result (core + boundary) to output
-    # This ensures repairs extending into boundary are captured
-    output_skeleton[expanded_slice] = repaired_chunk
+    # This ensures repairs extending into boundary are captured.
+    # Combine with what other chunks have already written: every chunk starts
+    # from the unrepaired input, so a plain assignment would erase the repairs
+    # that earlier chunks drew in the overlap.
+    output_skeleton[expanded_slice] = np.maximum(
+        np.array(output_skeleton[expanded_slice]), repaired_chunk
+    )
 
 
 def repair_breaks_lazy(
@@ -118,6 +142,7 @@ def repair_breaks_lazy(
     w_distance: float = 1.0,
     w_angle: float = 1.0,
     backend: Literal["cpu", "cupy"] = "cpu",
+    bridging: Literal["all", "pair", "tree"] = "all",
 ) -> None:
     """Repair breaks in a skeleton using lazy chunk-based processing.
 
@@ -162,6 +187,14 @@ def repair_breaks_lazy(
         cost function. Default is 1.0.
     backend : Literal["cpu", "cupy"], optional
         The backend to use for calculation. Default is "cpu".
+    bridging : {"all", "pair", "tree"}, optional
+        Which of the proposed bridges are drawn. "all" (default) draws one
+        bridge per end point, which can connect the same two fragments
+        several times and close loops. "pair" draws at most one bridge
+        between any two fragments. "tree" draws a bridge only if the two
+        fragments are not yet connected through other bridges. With
+        ``label_map_path``, this holds across chunks; without it, only
+        within each chunk.
 
     Raises
     ------
@@ -222,6 +255,13 @@ def repair_breaks_lazy(
         f"with border size {border_size}"
     )
 
+    # With a global label map, fragments keep their label in every chunk, so one
+    # registry for all chunks prevents bridging the same fragments twice. Without
+    # it, labels are chunk-local and each chunk uses its own registry.
+    bridge_registry = None
+    if bridging != "all" and label_map_zarr is not None:
+        bridge_registry = BridgeRegistry(mode=bridging)
+
     # Process chunks serially
     with tqdm(total=total_chunks, desc="Repairing breaks") as pbar:
         for i in range(n_chunks[0]):
@@ -271,6 +311,11 @@ def repair_breaks_lazy(
                         w_distance=w_distance,
                         w_angle=w_angle,
                         backend=backend,
+                        bridging=bridging,
+                        bridge_registry=bridge_registry,
+                        core_shape=tuple(
+                            core_end[dim] - core_start[dim] for dim in range(3)
+                        ),
                     )
 
 
@@ -285,6 +330,7 @@ def repair_fusion_breaks_chunk(
     label_map_zarr: zarr.Array | None = None,
     endpoint_mask_dilation: int = 0,
     backend: Literal["cpu", "cupy"] = "cpu",
+    background_value: float = 0,
 ) -> None:
     """Process a single chunk for fusion boundary skeleton break repair.
 
@@ -321,6 +367,10 @@ def repair_fusion_breaks_chunk(
         boundary mask before filtering endpoints. Default is 0.
     backend : Literal["cpu", "cupy"]
         The computation backend to use. Default is "cpu".
+    background_value : float, optional
+        The value of background voxels in the scale map. Default is 0.
+        Pass ``skeleplex.skeleton.fusion.scale_map.SCALE_MAP_BACKGROUND``
+        for scale maps of the fusion pipeline, in which 0 is a scale number.
 
     Returns
     -------
@@ -351,11 +401,17 @@ def repair_fusion_breaks_chunk(
         label_map=label_map_chunk,
         endpoint_mask_dilation=endpoint_mask_dilation,
         backend=backend,
+        background_value=background_value,
     )
 
     # Write full result (core + boundary) to output
-    # This ensures repairs extending into boundary are captured
-    output_skeleton[expanded_slice] = repaired_chunk
+    # This ensures repairs extending into boundary are captured.
+    # Combine with what other chunks have already written: every chunk starts
+    # from the unrepaired input, so a plain assignment would erase the repairs
+    # that earlier chunks drew in the overlap.
+    output_skeleton[expanded_slice] = np.maximum(
+        np.array(output_skeleton[expanded_slice]), repaired_chunk
+    )
 
 
 def repair_fusion_breaks_lazy(
@@ -368,6 +424,7 @@ def repair_fusion_breaks_lazy(
     label_map_path: str | Path | None = None,
     endpoint_mask_dilation: int = 0,
     backend: Literal["cpu", "cupy"] = "cpu",
+    background_value: float = 0,
 ) -> None:
     """Repair fusion boundary breaks in a skeleton using lazy chunk-based processing.
 
@@ -414,6 +471,10 @@ def repair_fusion_breaks_lazy(
         Default is 0 (no dilation).
     backend : Literal["cpu", "cupy"], optional
         The backend to use for calculation. Default is "cpu".
+    background_value : float, optional
+        The value of background voxels in the scale map. Default is 0.
+        Pass ``skeleplex.skeleton.fusion.scale_map.SCALE_MAP_BACKGROUND``
+        for scale maps of the fusion pipeline, in which 0 is a scale number.
 
     Raises
     ------
@@ -530,4 +591,5 @@ def repair_fusion_breaks_lazy(
                         label_map_zarr=label_map_zarr,
                         endpoint_mask_dilation=endpoint_mask_dilation,
                         backend=backend,
+                        background_value=background_value,
                     )
