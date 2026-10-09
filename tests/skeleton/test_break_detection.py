@@ -1411,6 +1411,25 @@ def test_find_fusion_boundaries_not_3d():
         find_fusion_boundaries(scale_map)
 
 
+def test_find_fusion_boundaries_background_value():
+    """Scale 0 is a label when the background has a dedicated value."""
+    background = 9999
+    scale_map = np.full((5, 5, 5), background, dtype=np.float32)
+    scale_map[:, :, :2] = 0
+    scale_map[:, :, 2:4] = -1
+
+    boundary = find_fusion_boundaries(scale_map, background_value=background)
+    # the two scales touch between x=1 and x=2; background (x=4) is no boundary
+    assert boundary[:, :, 1].all()
+    assert boundary[:, :, 2].all()
+    assert not boundary[:, :, 0].any()
+    assert not boundary[:, :, 3].any()
+    assert not boundary[:, :, 4].any()
+
+    # with the default background of 0, scale 0 is not a label
+    assert not find_fusion_boundaries(scale_map)[:, :, 1].any()
+
+
 def test_get_skeleton_data_cpu_endpoint_mask():
     """Endpoint mask filters out endpoints not on the mask."""
     # Create skeleton with two separate lines

@@ -531,25 +531,28 @@ def get_endpoint_directions(
 @njit
 def _find_fusion_boundaries_numba(
     scale_map_image: np.ndarray,
+    background_value: float = 0,
 ) -> np.ndarray:
     """Find voxels at prediction boundaries using 26-connectivity.
 
     Numba-jitted kernel for ``find_fusion_boundaries``. Performs a
     single pass over all voxels, checking 26-connected neighbors and
-    breaking early when a different non-zero neighbor is found.
+    breaking early when a different non-background neighbor is found.
 
     Parameters
     ----------
     scale_map_image : np.ndarray
-        3D integer array of prediction IDs. 0 is background; all
-        other values (including negative) are valid prediction IDs.
+        3D array of prediction IDs. ``background_value`` is background;
+        all other values (including negative) are valid prediction IDs.
+    background_value : float
+        The value of background voxels. Default is 0.
 
     Returns
     -------
     boundary_mask : np.ndarray
         3D boolean array of the same shape as ``scale_map_image``.
-        ``True`` at voxels that are non-zero and have at least one
-        26-connected neighbor with a different non-zero label.
+        ``True`` at voxels that are not background and have at least one
+        26-connected neighbor with a different non-background label.
 
     """
     nz, ny, nx = scale_map_image.shape
@@ -559,7 +562,7 @@ def _find_fusion_boundaries_numba(
         for y in range(ny):
             for x in range(nx):
                 val = scale_map_image[z, y, x]
-                if val == 0:
+                if val == background_value:
                     continue
 
                 for dz in range(-1, 2):
@@ -580,7 +583,7 @@ def _find_fusion_boundaries_numba(
                             ):
                                 continue
                             neighbor = scale_map_image[nz_, ny_, nx_]
-                            if neighbor != 0 and neighbor != val:
+                            if neighbor != background_value and neighbor != val:
                                 out[z, y, x] = True
                                 break
                         if out[z, y, x]:
@@ -593,19 +596,24 @@ def _find_fusion_boundaries_numba(
 
 def find_fusion_boundaries(
     scale_map_image: np.ndarray,
+    background_value: float = 0,
 ) -> np.ndarray:
     """Find voxels at prediction boundaries using 26-connectivity.
 
-    A voxel is on a fusion boundary if it has a non-zero label and
-    at least one 26-connected neighbor with a different non-zero
-    label. Background (0) neighbors do not trigger a boundary.
+    A voxel is on a fusion boundary if it is not background and has
+    at least one 26-connected neighbor with a different non-background
+    label. Background neighbors do not trigger a boundary.
 
     Parameters
     ----------
     scale_map_image : np.ndarray
-        3D integer array of prediction IDs. 0 is treated as
-        background. All non-zero values (including negative
-        integers) are valid prediction IDs.
+        3D array of prediction IDs. All values other than
+        ``background_value`` (including negative integers) are valid
+        prediction IDs.
+    background_value : float
+        The value of background voxels in ``scale_map_image``. Default is 0.
+        Pass ``skeleplex.skeleton.fusion.scale_map.SCALE_MAP_BACKGROUND`` for
+        scale maps of the fusion pipeline, in which 0 is a scale number.
 
     Returns
     -------
@@ -624,7 +632,7 @@ def find_fusion_boundaries(
             f"Expected 3D scale_map_image, got {scale_map_image.ndim}D array"
         )
 
-    return _find_fusion_boundaries_numba(scale_map_image)
+    return _find_fusion_boundaries_numba(scale_map_image, background_value)
 
 
 def get_skeleton_data_cpu(
@@ -961,6 +969,98 @@ def get_skeleton_data_cupy(
     )
 
 
+class BridgeRegistry:
+    """Keeps track of which skeleton fragments have been bridged.
+
+    Each end point proposes one bridge to another fragment. Without a
+    registry, several end points can bridge the same two fragments, and
+    every bridge after the first closes a loop.
+
+    Parameters
+    ----------
+    mode : {"pair", "tree"}
+        "pair": at most one bridge between any two fragments. Three or
+        more fragments can still be bridged into a loop.
+        "tree": a bridge is only accepted if the two fragments are not yet
+        connected, directly or through other bridges, so that no bridge
+        closes a loop. A fragment can still be bridged to several others.
+    """
+
+    def __init__(self, mode: Literal["pair", "tree"] = "tree"):
+        if mode not in ("pair", "tree"):
+            raise ValueError(f"Unsupported bridging mode: {mode}")
+        self.mode = mode
+        self._pairs: set[tuple[int, int]] = set()
+        self._parent: dict[int, int] = {}
+
+    def _find(self, label: int) -> int:
+        root = label
+        while self._parent.setdefault(root, root) != root:
+            root = self._parent[root]
+        while self._parent[label] != root:
+            self._parent[label], label = root, self._parent[label]
+        return root
+
+    def accept(self, label_a: int, label_b: int) -> bool:
+        """Return True and register the bridge if it is allowed."""
+        label_a, label_b = int(label_a), int(label_b)
+        if label_a == label_b:
+            return False
+        if self.mode == "pair":
+            pair = (min(label_a, label_b), max(label_a, label_b))
+            if pair in self._pairs:
+                return False
+            self._pairs.add(pair)
+            return True
+        root_a, root_b = self._find(label_a), self._find(label_b)
+        if root_a == root_b:
+            return False
+        self._parent[root_a] = root_b
+        return True
+
+
+def filter_repairs(
+    repair_start: np.ndarray,
+    repair_end: np.ndarray,
+    label_map: np.ndarray,
+    registry: BridgeRegistry,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Drop the proposed repairs that the registry does not allow.
+
+    Repairs are considered from the shortest to the longest, so that the
+    shortest bridge between two fragments is the one that is kept.
+
+    Parameters
+    ----------
+    repair_start : np.ndarray
+        (n_repairs, 3) array of repair start coordinates, -1 for no repair.
+    repair_end : np.ndarray
+        (n_repairs, 3) array of repair end coordinates, -1 for no repair.
+    label_map : np.ndarray
+        The connected components label map of the skeleton.
+    registry : BridgeRegistry
+        The registry of accepted bridges. It is updated in place.
+
+    Returns
+    -------
+    repair_start, repair_end : np.ndarray
+        Copies of the inputs in which rejected repairs are set to -1.
+    """
+    repair_start = repair_start.copy()
+    repair_end = repair_end.copy()
+    valid = np.flatnonzero(repair_start[:, 0] != -1)
+    lengths = np.linalg.norm(
+        (repair_start[valid] - repair_end[valid]).astype(np.float64), axis=1
+    )
+    for index in valid[np.argsort(lengths, kind="stable")]:
+        label_start = label_map[tuple(repair_start[index])]
+        label_end = label_map[tuple(repair_end[index])]
+        if not registry.accept(label_start, label_end):
+            repair_start[index] = -1
+            repair_end[index] = -1
+    return repair_start, repair_end
+
+
 def repair_breaks(
     skeleton_image: np.ndarray,
     segmentation: np.ndarray,
@@ -973,6 +1073,8 @@ def repair_breaks(
     w_distance: float = 1.0,
     w_angle: float = 1.0,
     backend: Literal["cpu", "cupy"] = "cpu",
+    bridging: Literal["all", "pair", "tree"] = "all",
+    bridge_registry: BridgeRegistry | None = None,
 ) -> np.ndarray:
     """Repair breaks in a skeleton.
 
@@ -1017,6 +1119,17 @@ def repair_breaks(
         cost function. Default is 1.0.
     backend : Literal["cpu", "cupy"], optional
         The backend to use for calculation. Default is "cpu".
+    bridging : {"all", "pair", "tree"}, optional
+        Which of the proposed bridges are drawn. "all" (default) draws one
+        bridge per end point, which can connect the same two fragments
+        several times and close loops. "pair" draws at most one bridge
+        between any two fragments. "tree" draws a bridge only if the two
+        fragments are not yet connected through other bridges, so that
+        no bridge closes a loop. The shortest bridges are kept.
+    bridge_registry : BridgeRegistry or None, optional
+        Registry of the bridges accepted so far. Pass the same registry to
+        several calls that share one global ``label_map`` (chunk-wise
+        processing). If None, a new registry is used for this call.
 
     Returns
     -------
@@ -1132,6 +1245,14 @@ def repair_breaks(
         w_angle=w_angle,
     )
 
+    # Keep at most one bridge between fragments
+    if bridging != "all":
+        if bridge_registry is None:
+            bridge_registry = BridgeRegistry(mode=bridging)
+        repair_start, repair_end = filter_repairs(
+            repair_start, repair_end, skeleton_label_map, bridge_registry
+        )
+
     # Draw the repairs in-place
     draw_lines(
         skeleton=repaired_skeleton,
@@ -1153,6 +1274,7 @@ def repair_fusion_breaks(
     label_map: np.ndarray | None = None,
     endpoint_mask_dilation: int = 0,
     backend: Literal["cpu", "cupy"] = "cpu",
+    background_value: float = 0,
 ) -> np.ndarray:
     """Repair skeleton breaks at prediction fusion boundaries.
 
@@ -1203,6 +1325,10 @@ def repair_fusion_breaks(
     backend : Literal["cpu", "cupy"], optional
         The backend to use for skeleton data extraction.
         Default is "cpu".
+    background_value : float, optional
+        The value of background voxels in the scale map. Default is 0.
+        Pass ``skeleplex.skeleton.fusion.scale_map.SCALE_MAP_BACKGROUND``
+        for scale maps of the fusion pipeline, in which 0 is a scale number.
 
     Returns
     -------
@@ -1275,7 +1401,7 @@ def repair_fusion_breaks(
     repaired_skeleton = skeleton_binary.copy()
 
     # Compute fusion boundary mask
-    endpoint_mask = find_fusion_boundaries(scale_map_image)
+    endpoint_mask = find_fusion_boundaries(scale_map_image, background_value)
 
     # Extract skeleton topology data with endpoint mask
     if backend == "cpu":

@@ -33,7 +33,7 @@ print("Scaled image was loaded and rechunked")
 
 print("Calculate distance field next")
 start_time = time.time()
-prefunction = partial(local_normalized_distance_gpu, max_ball_radius=2)
+prefunction = partial(local_normalized_distance_gpu, max_ball_radius=30)
 
 save_here = zarr.open(
     f"{DISTANCE_FIELD_ZARR}/scale{scale_number}_maxball_2",
