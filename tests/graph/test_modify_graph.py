@@ -1,17 +1,24 @@
 from copy import deepcopy
 
+import networkx as nx
 import numpy as np
+import pytest
 
 from skeleplex.graph.constants import (
+    EDGE_COORDINATES_KEY,
+    EDGE_SPLINE_KEY,
     NODE_COORDINATE_KEY,
 )
 from skeleplex.graph.modify_graph import (
     delete_edge,
     length_pruning,
     merge_edge,
+    merge_nodes,
     move_branch_point_along_edge,
     split_edge,
 )
+from skeleplex.graph.skeleton_graph import SkeletonGraph
+from skeleplex.graph.spline import B3Spline
 
 
 def test_merge_edge(straight_edge_graph):
@@ -69,3 +76,40 @@ def test_move_branch_point_along_edge(simple_t_skeleton_graph):
     np.testing.assert_allclose(
         obj.graph.nodes[1][NODE_COORDINATE_KEY], np.array([10, 6.666, 0]), atol=0.001
     )
+
+
+def _two_fragment_graph(directed: bool) -> SkeletonGraph:
+    """Two collinear edges 0-1 and 2-3 separated by a break between 1 and 2."""
+    graph = nx.DiGraph() if directed else nx.Graph()
+    for node in range(4):
+        graph.add_node(node, **{NODE_COORDINATE_KEY: np.array([0, 0, 10.0 * node])})
+    for u, v in ((0, 1), (2, 3)):
+        points = np.linspace([0, 0, 10.0 * u], [0, 0, 10.0 * v], 6)
+        graph.add_edge(
+            u,
+            v,
+            **{
+                EDGE_COORDINATES_KEY: points,
+                EDGE_SPLINE_KEY: B3Spline.from_points(points),
+            },
+        )
+    return SkeletonGraph(graph=graph)
+
+
+@pytest.mark.parametrize("directed", [False, True])
+def test_merge_nodes(directed):
+    """Merging an end point bridges the break and removes the merged node.
+
+    On undirected graphs the neighbour of the merged node used to be taken as
+    the node itself, so the merge always failed.
+    """
+    skeleton_graph = _two_fragment_graph(directed)
+
+    merge_nodes(skeleton_graph, node_to_keep=1, node_to_merge=2)
+
+    graph = skeleton_graph.graph
+    assert 2 not in graph
+    assert set(graph.nodes) == {0, 1, 3}
+    assert graph.number_of_edges() == 2
+    assert graph.has_edge(1, 3) or graph.has_edge(3, 1)
+    assert nx.number_connected_components(graph.to_undirected()) == 1

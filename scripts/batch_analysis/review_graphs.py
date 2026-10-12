@@ -20,6 +20,10 @@ Widget (added to the skeleplex viewer):
                            sample, where every later stage picks it up in
                            preference to the raw graph
 
+The origin is set with the viewer's own "Set Origin" widget (left dock, tab
+next to "Change Branch Color"): it keeps only the connected component that
+contains the origin and makes the graph directed.
+
 A graph already curated is reloaded from graphs_fixed/ rather than from the raw
 graph, so re-opening the browser shows your previous work.
 
@@ -39,7 +43,6 @@ import numpy as np
 from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -77,13 +80,6 @@ def guard(method):
             except Exception:
                 pass
     return wrapper
-
-
-def parse_origin_node(text):
-    """Parse an origin node id from the widget text. Accepts a bare int
-    ('322') or a single-element set as typed ('{322}')."""
-    s = str(text).strip().strip("{}").strip().rstrip(",").strip()
-    return int(s)
 
 
 def update_graph_in_viewer(graph: SkeletonGraph, app) -> None:
@@ -213,10 +209,6 @@ class GraphBrowser(QWidget):
         update_graph_in_viewer(graph, self.app)
         self._clear_history()
         self._show_cut_markers([])
-
-        # Update origin edit if graph already has origin stored
-        if hasattr(self._graph, "origin") and self._graph.origin is not None:
-            self.origin_edit.setText(str(self._graph.origin))
 
         n_nodes = self._graph.graph.number_of_nodes()
         n_edges = self._graph.graph.number_of_edges()
@@ -363,6 +355,8 @@ class GraphBrowser(QWidget):
         if self._graph is None:
             self.status.setText("No graph loaded.")
             return
+        # the viewer holds the current state (edits, undo, origin)
+        self._graph = self.app.data.skeleton_graph
         ref = self.ref
         out_dir = graphs_fixed_dir(ref.sample)
         out_dir.mkdir(parents=True, exist_ok=True)

@@ -47,11 +47,25 @@ class MainWindow(QModelMainWindow):
         self._create_app_controls()
 
     def add_auxiliary_widget(
-        self, widget: QWidget, name: str = "", area: str = "right"
+        self,
+        widget: QWidget,
+        name: str = "",
+        area: str = "right",
+        tabify_with: str | None = None,
     ):
-        """Add a widget to the auxiliary views dock."""
+        """Add a widget to the auxiliary views dock.
+
+        If tabify_with names a widget that was added before, the new widget
+        is placed in a tab behind it instead of taking its own space.
+        """
         dock_widget = QDockWidget(name)
         dock_widget.setWidget(widget)
+        if not hasattr(self, "_auxiliary_docks"):
+            self._auxiliary_docks = {}
+        self._auxiliary_docks[name] = dock_widget
+        if tabify_with in self._auxiliary_docks:
+            self.tabifyDockWidget(self._auxiliary_docks[tabify_with], dock_widget)
+            return
         dock_area = (
             Qt.DockWidgetArea.LeftDockWidgetArea
             if area == "left"
