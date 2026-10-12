@@ -19,6 +19,7 @@ from skeleplex.app._curate import (
     HighLevelPathWidget,
     RenderAroundNodeWidget,
     RenderReachableEdgesWidget,
+    SetOriginWidget,
     guard,
     make_split_edge_widget,
 )
@@ -114,6 +115,7 @@ def view_skeleton(
             split_edge_widget = make_split_edge_widget(viewer)
 
             ChangeBranchColorWidget(viewer)
+            SetOriginWidget(viewer)
             ConnectedComponentsWidget(viewer)
             # BreakDetectionWidget(viewer)
 

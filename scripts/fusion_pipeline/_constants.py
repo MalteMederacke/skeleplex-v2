@@ -34,10 +34,11 @@ CHECKPOINT_PATH = "reg-best.ckpt"  # ADAPT HERE — path to model checkpoint
 MAX_BALL_RADIUS = 30  # ADAPT HERE
 
 # Which bridges the break repair draws (steps 2_4_5 and 3).
-# "tree": only between fragments that are not yet connected, so that no bridge
-#         closes a loop; "pair": at most one bridge between any two fragments;
+# "pair": at most one bridge between any two fragments (the shortest);
+# "tree": only between fragments that are not yet connected in any way, so that
+#         no bridge closes a loop, at the risk of keeping a wrong bridge;
 # "all":  one bridge per end point (can close loops).
-REPAIR_BRIDGING = "tree"  # ADAPT HERE
+REPAIR_BRIDGING = "pair"  # ADAPT HERE
 
 # Sliding-window tile size for skeleton prediction (step 2_3).
 # ADAPT HERE — reduce if the GPU runs out of memory

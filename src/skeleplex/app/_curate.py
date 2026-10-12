@@ -405,6 +405,68 @@ class CurationManager:
             # redraw the graph
             self._update_and_request_redraw()
 
+    def set_origin(
+        self,
+        origin: int,
+        keep_only_origin_component: bool = True,
+        redraw: bool = True,
+    ) -> dict[str, int]:
+        """Set the origin of the skeleton graph and direct the edges away from it.
+
+        The graph is made undirected first, so the origin of a graph that is
+        already directed can be changed.
+
+        Parameters
+        ----------
+        origin : int
+            The ID of the node to use as the origin (root) of the tree.
+        keep_only_origin_component : bool
+            If True, the connected components that do not contain the origin
+            are removed. Default is True.
+        redraw : bool
+            Flag set to True to redraw the graph afterwards.
+            Defaults value is True.
+
+        Returns
+        -------
+        dict[str, int]
+            The numbers found before directing: "components" (connected
+            components), "removed_nodes" (nodes of the removed components) and
+            "loops" (independent loops in the component of the origin). Making
+            the graph directed keeps a spanning tree, so one edge per loop is
+            dropped.
+        """
+        graph = self._data.skeleton_graph.graph
+        if origin not in graph:
+            raise ValueError(f"Node {origin} is not in the graph.")
+
+        # store the previous state in the undo buffer
+        self._undo_buffer.push(deepcopy(self._data.skeleton_graph))
+
+        undirected = graph.to_undirected() if graph.is_directed() else graph
+        n_components = nx.number_connected_components(undirected)
+        component = nx.node_connected_component(undirected, origin)
+        origin_part = undirected.subgraph(component)
+        n_loops = origin_part.number_of_edges() - origin_part.number_of_nodes() + 1
+
+        n_removed = 0
+        if keep_only_origin_component:
+            n_removed = undirected.number_of_nodes() - len(component)
+            undirected = origin_part.copy()
+
+        self._data.skeleton_graph.graph = undirected
+        self._data.skeleton_graph.to_directed(origin)
+
+        if redraw:
+            # redraw the graph
+            self._update_and_request_redraw()
+
+        return {
+            "components": n_components,
+            "removed_nodes": n_removed,
+            "loops": n_loops,
+        }
+
     def undo(self, redraw: bool = True) -> None:
         """Undo the last action performed on the skeleton graph.
 
@@ -520,6 +582,96 @@ class CurationManager:
 
         # Update the data view
         self._data.skeleton_view.update()
+
+
+class SetOriginWidget(QWidget):
+    """Widget to set the origin of the graph and make the graph directed.
+
+    Parameters
+    ----------
+    viewer : SkelePlexApp
+        The SkelePlex application instance.
+    """
+
+    def __init__(self, viewer) -> None:
+        super().__init__()
+        self.viewer = viewer
+
+        origin_label = QLabel("Origin node ID:")
+        self._origin_input = QLineEdit()
+        self._origin_input.setPlaceholderText("e.g. {0}")
+
+        self._keep_checkbox = QCheckBox("Keep only the origin component")
+        self._keep_checkbox.setChecked(True)
+
+        run_button = QPushButton("Set origin && make directed")
+        run_button.clicked.connect(self._on_run_clicked)
+
+        self._status_label = QLabel("")
+        self._status_label.setWordWrap(True)
+
+        layout = QVBoxLayout()
+        layout.addWidget(origin_label)
+        layout.addWidget(self._origin_input)
+        layout.addWidget(self._keep_checkbox)
+        layout.addWidget(run_button)
+        layout.addWidget(self._status_label)
+        layout.addStretch()
+        self.setLayout(layout)
+
+        viewer.add_auxiliary_widget(
+            self, name="Set Origin", area="left", tabify_with="Change Branch Color"
+        )
+
+    def _set_status(self, msg: str) -> None:
+        self._status_label.setText(msg)
+
+    @guard
+    def _on_run_clicked(self) -> None:
+        """Parse the origin, direct the graph and report what was changed."""
+        text = self._origin_input.text().strip()
+        try:
+            if text:
+                # accept a bare int (322) or a set as copied from the selection ({322})
+                origin = int(text.strip("{}").strip().rstrip(",").strip())
+            else:
+                origin = self.viewer.data.skeleton_graph.origin
+        except ValueError:
+            origin = None
+        if origin is None:
+            self._set_status("Invalid origin node ID (use e.g. 322 or {322}).")
+            return
+
+        try:
+            summary = self.viewer.curate.set_origin(
+                origin,
+                keep_only_origin_component=self._keep_checkbox.isChecked(),
+            )
+        except ValueError as e:
+            self._set_status(str(e))
+            return
+
+        graph = self.viewer.data.skeleton_graph.graph
+        lines = [
+            f"Origin {origin} set, graph is directed: "
+            f"{graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges."
+        ]
+        if summary["removed_nodes"] > 0:
+            lines.append(
+                f"Removed {summary['components'] - 1} other component(s) "
+                f"with {summary['removed_nodes']} nodes."
+            )
+        elif summary["components"] > 1:
+            lines.append(
+                f"Warning: {summary['components'] - 1} component(s) are not "
+                "connected to the origin."
+            )
+        if summary["loops"] > 0:
+            lines.append(
+                f"Warning: {summary['loops']} loop(s) were opened by dropping "
+                "one edge each. Undo and remove them by hand to choose the edge."
+            )
+        self._set_status("\n".join(lines))
 
 
 class RenderAroundNodeWidget(QWidget):

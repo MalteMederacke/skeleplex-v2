@@ -686,11 +686,15 @@ def merge_nodes(
             f"Node {node_to_merge} has degree {degree_of_merge}. "
             "Only nodes with degree 1 can be merged."
         )
-    if skeleton_graph.graph.is_directed():
-        edge_iter = skeleton_graph.graph.in_edges(node_to_merge)
+    graph = skeleton_graph.graph
+    if graph.is_directed():
+        # the single neighbour is either the parent or the child
+        neighbours = list(graph.predecessors(node_to_merge)) + list(
+            graph.successors(node_to_merge)
+        )
     else:
-        edge_iter = skeleton_graph.graph.edges(node_to_merge)
-    second_node_to_keep = next(iter(edge_iter))[0]
+        neighbours = list(graph.neighbors(node_to_merge))
+    second_node_to_keep = neighbours[0]
     skeleton_graph.graph = connect_without_merging(
         skeleton_graph=skeleton_graph,
         node1=node_to_keep,

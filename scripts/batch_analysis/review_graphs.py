@@ -4,14 +4,13 @@ Widget (added to the skeleplex viewer):
   Prev / Next            : cycle through every graph found by the layout module
                            (loads the graph plus the segmentation zarr it was
                            built on, so the two are always aligned)
-  Origin node ID         : node id to use as origin — accepts a bare int (322)
-                           or a single-element set as typed ({322})
-  Set origin & direct    : keep only the connected component that contains the
-                           origin, call graph.to_directed(origin), and update
-                           the viewer in place
   Save to graphs_fixed/  : write the (possibly directed) graph beside its
                            sample, where every later stage picks it up in
                            preference to the raw graph
+
+The origin is set with the viewer's own "Set Origin" widget (left dock, tab
+next to "Change Branch Color"): it keeps only the connected component that
+contains the origin and makes the graph directed.
 
 A graph already curated is reloaded from graphs_fixed/ rather than from the raw
 graph, so re-opening the browser shows your previous work.
@@ -25,11 +24,9 @@ import sys
 import traceback
 from pathlib import Path
 
-import networkx as nx
 from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -66,13 +63,6 @@ def guard(method):
             except Exception:
                 pass
     return wrapper
-
-
-def parse_origin_node(text):
-    """Parse an origin node id from the widget text. Accepts a bare int
-    ('322') or a single-element set as typed ('{322}')."""
-    s = str(text).strip().strip("{}").strip().rstrip(",").strip()
-    return int(s)
 
 
 def update_graph_in_viewer(graph: SkeletonGraph, app) -> None:
@@ -123,16 +113,6 @@ class GraphBrowser(QWidget):
         nav.addWidget(btn_next)
         layout.addLayout(nav)
 
-        # Origin input
-        layout.addWidget(QLabel("Origin node ID:"))
-        self.origin_edit = QLineEdit("0")
-        self.origin_edit.setPlaceholderText("e.g. 456 or {456}")
-        layout.addWidget(self.origin_edit)
-
-        btn_direct = QPushButton("Set origin & make directed")
-        btn_direct.clicked.connect(self.set_origin_and_direct)
-        layout.addWidget(btn_direct)
-
         self.btn_save = QPushButton("Save → graphs_fixed/")
         self.btn_save.clicked.connect(self.save_graph)
         layout.addWidget(self.btn_save)
@@ -173,10 +153,6 @@ class GraphBrowser(QWidget):
             self._update_title()
             return
 
-        # Update origin edit if graph already has origin stored
-        if hasattr(self._graph, "origin") and self._graph.origin is not None:
-            self.origin_edit.setText(str(self._graph.origin))
-
         n_nodes = self._graph.graph.number_of_nodes()
         n_edges = self._graph.graph.number_of_edges()
         self.info_label.setText(f"nodes: {n_nodes}  edges: {n_edges}")
@@ -212,47 +188,12 @@ class GraphBrowser(QWidget):
             self._load_current()
 
     @guard
-    def set_origin_and_direct(self):
-        if self._graph is None:
-            self.status.setText("No graph loaded.")
-            return
-        try:
-            origin = parse_origin_node(self.origin_edit.text())
-        except ValueError:
-            self.status.setText("Invalid origin node ID (use e.g. 322 or {322}).")
-            return
-
-        undirected = self._graph.graph.to_undirected()
-        if origin not in undirected:
-            self.status.setText(f"Node {origin} not in graph.")
-            return
-
-        # Keep only the connected component containing origin
-        components = list(nx.connected_components(undirected))
-        main_comp = next(c for c in components if origin in c)
-        if len(main_comp) < undirected.number_of_nodes():
-            removed = undirected.number_of_nodes() - len(main_comp)
-            self._graph.graph = nx.Graph(undirected.subgraph(main_comp).copy())
-            self.status.setText(
-                f"Kept component with {len(main_comp)} nodes (removed {removed})."
-            )
-        else:
-            self.status.setText(f"Origin {origin} set.")
-
-        self._graph.to_directed(origin)
-        update_graph_in_viewer(self._graph, self.app)
-
-        n_nodes = self._graph.graph.number_of_nodes()
-        n_edges = self._graph.graph.number_of_edges()
-        self.info_label.setText(
-            f"nodes: {n_nodes}  edges: {n_edges}  origin: {origin}  [directed]"
-        )
-
-    @guard
     def save_graph(self):
         if self._graph is None:
             self.status.setText("No graph loaded.")
             return
+        # the viewer holds the current state (edits, undo, origin)
+        self._graph = self.app.data.skeleton_graph
         ref = self.ref
         out_dir = graphs_fixed_dir(ref.sample)
         out_dir.mkdir(parents=True, exist_ok=True)
