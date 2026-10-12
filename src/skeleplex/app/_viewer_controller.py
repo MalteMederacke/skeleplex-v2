@@ -379,6 +379,10 @@ class MainCanvasController:
         fit_owner = uuid4()
 
         def _fit_when_ready(event=None) -> None:
+            # cellier creates the 3D camera with a fixed (1, 8000) depth range,
+            # which clips skeletons larger than that. Scale the clipping planes
+            # with the scene before fitting, so the fitted state includes them.
+            self._fit_depth_range_to_scene()
             self._backend.look_at_visual(
                 visual_id=self._skeleton.node_visual.id,
                 canvas_id=self._canvas_id,
@@ -393,6 +397,24 @@ class MainCanvasController:
         )
         # trigger the slice cycle that uploads positions and fires the callback.
         self._backend.reslice_scene(self._scene_id)
+
+    def _fit_depth_range_to_scene(self) -> None:
+        """Scale the camera clipping planes with the size of the scene.
+
+        The near/far ratio is kept constant so depth precision is the same
+        regardless of the scale of the data. cellier has no public hook for
+        the scene bounds, so it reaches into the private render manager.
+        """
+        gfx_scene = self._backend._render_manager.get_scene(self._scene_id)
+        bounding_sphere = gfx_scene.get_world_bounding_sphere()
+        if bounding_sphere is None:
+            return
+        radius = float(bounding_sphere[3])
+        if not np.isfinite(radius) or radius <= 0:
+            return
+        self._backend.set_camera_depth_range(
+            self._canvas_id, (radius * 1e-4, radius * 20)
+        )
 
     def set_edge_highlight(
         self,
