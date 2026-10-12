@@ -1,13 +1,16 @@
 import pytorch_lightning as pl  # noqa: D100
 
-from skeleplex.measurements.lumen_classifier import H5DataModule, ResNet3ClassClassifier
+from skeleplex.measurements.lumen_classifier import (
+    ConvNext3ClassClassifier,
+    H5DataModule,
+)
 
-# This example trains a ResNet classifier to classify lumen, branch and bad slices
+# This example trains a ConvNeXt classifier to classify lumen, branch and bad slices
 # Set up your training data first using the create_lumen_classifier_trainings_data.py
 
 # Set up dataset and model
 dataset_root = "dataset/"
-model = ResNet3ClassClassifier(num_classes=3)
+model = ConvNext3ClassClassifier(num_classes=3)
 data_module = H5DataModule(data_dir=dataset_root, batch_size=16)
 
 

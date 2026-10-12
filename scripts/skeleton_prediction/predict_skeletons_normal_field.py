@@ -25,7 +25,7 @@ from skeleplex.skeleton.distance_field import (
 )
 from skeleplex.skeleton._skeletonize import (
     load_normal_field_model,
-    skeletonize_from_normal_field,
+    skeletonize,
 )
 from skeleplex.utils._chunked import iteratively_process_chunks_3d
 
@@ -160,8 +160,8 @@ def main(
     model = load_normal_field_model(checkpoint_path)
 
     print("Running inference...")
-    prediction = skeletonize_from_normal_field(
-        normal_field=normal_field,
+    prediction = skeletonize(
+        normal_field,
         model=model,
         roi_size=roi_size,
         overlap=overlap,

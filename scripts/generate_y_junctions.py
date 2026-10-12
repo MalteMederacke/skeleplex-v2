@@ -2,7 +2,7 @@ import os  # noqa: D100
 
 import h5py
 
-from skeleplex.synthetic_data.y_junctions import (
+from skeleplex.data.y_junctions import (
     generate_y_junction,
     random_parameters_y_junctions,
 )

@@ -10,7 +10,6 @@ import numpy as np
 import zarr
 from skimage.morphology import skeletonize as sk_skeletonize
 
-from skeleplex.skeleton._skeletonize import threshold_skeleton
 from skeleplex.utils._chunked import iteratively_process_chunks_3d
 
 # isort: split
@@ -69,9 +68,7 @@ masked_segmentation_reloaded = da.from_zarr(
 
 # Threshold image
 start_time3 = time.time()
-lung_image_binary_skeleton = threshold_skeleton(
-    masked_segmentation_reloaded, threshold=threshold
-)
+lung_image_binary_skeleton = (masked_segmentation_reloaded > threshold).astype("uint8")
 lung_image_binary_skeleton.to_zarr(
     f"{SKELETON_PREDICTIONS_ZARR}/scale{scale_number}_ts",
     mode="w",

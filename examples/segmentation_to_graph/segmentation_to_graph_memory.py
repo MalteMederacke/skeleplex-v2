@@ -1,5 +1,5 @@
 import dask.array as da  # noqa: D100
-from skimage.morphology import ski_skeletonize
+from skimage.morphology import skeletonize as ski_skeletonize
 
 from skeleplex.graph.skeleton_graph import SkeletonGraph
 from skeleplex.skeleton._skeletonize import skeletonize

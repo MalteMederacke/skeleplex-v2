@@ -4,13 +4,11 @@ import dask.array as da
 import numpy as np
 from skimage.morphology import skeletonize
 
-from skeleplex.skeleton._skeletonize import threshold_skeleton
-
 path_to_skeleton = "../example_data/skeleton_prediction.zarr"
 
 skeleton_prediction = da.from_zarr(path_to_skeleton)
 
-binary_skeleton = threshold_skeleton(skeleton_prediction, threshold=0.6)
+binary_skeleton = (skeleton_prediction > 0.6).astype(np.uint8)
 
 
 factor = np.array([4, 4, 4])  # even numbers
