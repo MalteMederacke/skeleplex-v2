@@ -68,7 +68,8 @@ Measurement CSVs go to one shared `CSVS_DIR` in both layouts.
 | 3b | `add_channel_to_zarrs.py` | extra image channels into those zarrs (nested only) |
 | 4 | `review_segmentations.py` | napari QC, component curation, bad-quality rejection |
 | 5 | `segmentation_to_graph_batch.py` | segmentation → skeleton → `graphs/<name>_graph.json` |
-| 6 | `review_graphs.py` | set origin, keep main component, make directed → `graphs_fixed/` |
+| 6 | `review_graphs.py` | set origin, break loops, keep main component, make directed → `graphs_fixed/` |
+| 6b | `train_loop_breaker.py` | curated graphs → loop-breaker model for "Auto-break loops" in step 6 |
 | 7 | `analyze_graphs_batch.py` | curated graphs → measurement CSVs |
 
 Steps 0a/0b are only needed when starting from raw CZI acquisitions; a dataset
