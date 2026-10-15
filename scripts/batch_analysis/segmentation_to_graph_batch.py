@@ -137,7 +137,7 @@ def process_sample(sample, model, backend):
 
 
 def main(
-    checkpoint: Path = None,
+    checkpoint: Path | str | None = None,
     backend: str = NORMAL_FIELD_BACKEND,
     channels=None,
 ) -> None:
@@ -145,15 +145,16 @@ def main(
 
     Parameters
     ----------
-    checkpoint : Path, optional
-        Normal-field skeleton-prediction model checkpoint (``.ckpt``).
-        Defaults to SKELETON_CHECKPOINT.
+    checkpoint : Path or str, optional
+        Normal-field skeleton-prediction model checkpoint (``.ckpt``), or
+        ``"pretrained"`` for the published model. Defaults to
+        SKELETON_CHECKPOINT.
     backend : str
         ``"cpu"`` or ``"gpu"`` for the inward unit normal field computation.
     channels : sequence of str, optional
         Channel preference order. Defaults to CHANNEL_PRIORITY.
     """
-    checkpoint = Path(checkpoint) if checkpoint else Path(SKELETON_CHECKPOINT)
+    checkpoint = checkpoint or SKELETON_CHECKPOINT
 
     samples = find_segmented(channels=channels)
     if not samples:
@@ -192,7 +193,7 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--checkpoint", type=Path, default=SKELETON_CHECKPOINT)
+    parser.add_argument("--checkpoint", default=SKELETON_CHECKPOINT)
     parser.add_argument(
         "--backend", choices=["cpu", "gpu"], default=NORMAL_FIELD_BACKEND,
         help="Backend for the inward unit normal field computation.",

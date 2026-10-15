@@ -16,12 +16,17 @@ from skeleplex.skeleton._chunked_label import (
 )
 from skeleplex.skeleton._chunked_upscale import upscale_skeleton_parallel
 from skeleplex.skeleton._segment import segment
-from skeleplex.skeleton._skeletonize import skeletonize
+from skeleplex.skeleton._skeletonize import load_normal_field_model, skeletonize
 from skeleplex.skeleton._upscale import upscale_skeleton
-from skeleplex.skeleton._utils import get_skeletonization_model
+from skeleplex.skeleton._utils import (
+    get_normal_field_model_path,
+    get_skeletonization_model,
+)
 
 __all__ = [
+    "get_normal_field_model_path",
     "get_skeletonization_model",
+    "load_normal_field_model",
     "segment",
     "skeletonize",
     "label_chunks_parallel",

@@ -16,6 +16,14 @@ SKELETONIZATION_MODEL_REGISTRY = pooch.create(
     registry={"skel-best.ckpt": "md5:fd1676cf743c1bd2f672425fcc366b5c"},
 )
 
+# registry for the normal-field model of the batch pipeline
+NORMAL_FIELD_MODEL_REGISTRY = pooch.create(
+    path=pooch.os_cache("skeleplex"),
+    env="SKELEPLEX_CACHE",
+    base_url="doi:10.5281/zenodo.23396664",
+    registry={"skeleton-reg-best.ckpt": "md5:ee08849ced275384c4258ca0c7afd513"},
+)
+
 
 def get_skeletonization_model() -> MultiscaleSkeletonizationNet:
     """Get a pretrained model from the SkelePlex repository.
@@ -29,6 +37,20 @@ def get_skeletonization_model() -> MultiscaleSkeletonizationNet:
     file_path = SKELETONIZATION_MODEL_REGISTRY.fetch("skel-best.ckpt")
 
     return MultiscaleSkeletonizationNet.load_from_checkpoint(file_path)
+
+
+def get_normal_field_model_path() -> str:
+    """Download the pretrained normal-field model if needed and return its path.
+
+    The weights are cached like those of the distance-field model; set
+    SKELEPLEX_CACHE to change the location.
+
+    Returns
+    -------
+    str
+        Path to the checkpoint of the normal-field model.
+    """
+    return NORMAL_FIELD_MODEL_REGISTRY.fetch("skeleton-reg-best.ckpt")
 
 
 def make_image_5d(image: np.ndarray) -> np.ndarray:

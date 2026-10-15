@@ -84,7 +84,9 @@ Supporting modules, not run directly:
 - `inference.py` — sliding-window segmentation for a trained checkpoint
 
 Step 5 needs a separate normal-field skeleton-prediction model
-(`SKELETON_CHECKPOINT`), distinct from the segmentation models.
+(`SKELETON_CHECKPOINT`), distinct from the segmentation models. The default,
+`"pretrained"`, downloads the published model
+(https://doi.org/10.5281/zenodo.23396664) on first use.
 
 ## Channels
 
