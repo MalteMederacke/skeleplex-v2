@@ -179,7 +179,10 @@ def delete_edge(
     changed_edges = set(skeleton_graph.graph.edges) - set(graph.edges)
     skeleton_graph.graph = graph
     for edge in changed_edges:
-        for node in edge:
+        # the edges of a MultiGraph carry a key as third entry: use the nodes only
+        for node in edge[:2]:
+            if node not in skeleton_graph.graph:
+                continue
             if skeleton_graph.graph.degree(node) == 0:
                 skeleton_graph.graph.remove_node(node)
             elif skeleton_graph.graph.degree(node) == 2:

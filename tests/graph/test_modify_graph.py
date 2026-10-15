@@ -113,3 +113,36 @@ def test_merge_nodes(directed):
     assert graph.number_of_edges() == 2
     assert graph.has_edge(1, 3) or graph.has_edge(3, 1)
     assert nx.number_connected_components(graph.to_undirected()) == 1
+
+
+@pytest.mark.parametrize("first_node", [0, 5])
+def test_delete_edge_multigraph(first_node):
+    """Deleting an edge works on a MultiGraph, as built from a skeleton image.
+
+    The edges of a MultiGraph are (u, v, key) triples. The key used to be
+    treated as a node, so the deletion failed when node 0 did not exist or
+    was removed with the edge.
+    """
+    a, b, c, d = (first_node + i for i in range(4))
+    graph = nx.MultiGraph()
+    for node in (a, b, c, d):
+        graph.add_node(node, **{NODE_COORDINATE_KEY: np.array([0.0, 0.0, float(node)])})
+    for u, v in ((a, b), (b, c), (b, d)):
+        points = np.linspace(
+            graph.nodes[u][NODE_COORDINATE_KEY], graph.nodes[v][NODE_COORDINATE_KEY], 6
+        )
+        graph.add_edge(
+            u,
+            v,
+            **{
+                EDGE_COORDINATES_KEY: points,
+                EDGE_SPLINE_KEY: B3Spline.from_points(points),
+            },
+        )
+    skeleton_graph = SkeletonGraph(graph=graph)
+
+    # the terminal edge at the first node: the node is removed, b is merged away
+    delete_edge(skeleton_graph, (a, b))
+
+    assert set(skeleton_graph.graph.nodes) == {c, d}
+    assert skeleton_graph.graph.number_of_edges() == 1
