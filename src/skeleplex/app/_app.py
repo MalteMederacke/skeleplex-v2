@@ -183,8 +183,36 @@ class SkelePlexApp(Application):
         # store the highlighted edge keys
         self.data.skeleton_view._highlighted_node_keys = highlighted_node_keys
 
+    def save_skeleton_graph(self) -> None:
+        """Ask for a file name and save the current skeleton graph as JSON."""
+        from qtpy.QtWidgets import QFileDialog, QMessageBox
+
+        if self.data.skeleton_graph is None:
+            QMessageBox.warning(self._main_window, "Save graph", "No graph is loaded.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self._main_window,
+            "Save skeleton graph",
+            str(self.data.default_save_path()),
+            "Skeleton graph (*.json)",
+        )
+        if not path:
+            return
+        saved = self.data.save_skeleton_graph(path)
+        self._main_window.statusBar().showMessage(f"Saved graph to {saved}", 10000)
+
     def _register_data_actions(self) -> None:
         """Register actions for adding/removing data to/from the viewer."""
+        self.register_action(
+            Action(
+                id=CommandId.SAVE,
+                title="Save graph as...",
+                icon="fa6-solid:floppy-disk",
+                callback=self.save_skeleton_graph,
+                menus=[MenuRule(id=MenuId.FILE)],
+                keybindings=[KeyBindingRule(primary=KeyMod.CtrlCmd | KeyCode.KeyS)],
+            )
+        )
         # add points
         self.register_action(
             Action(
