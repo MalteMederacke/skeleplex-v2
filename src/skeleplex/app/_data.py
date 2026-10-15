@@ -903,6 +903,35 @@ class DataManager:
             # update the data event for triggering redraw
             self.events.data.emit()
 
+    def save_skeleton_graph(self, path: str | Path) -> Path:
+        """Save the current skeleton graph, including all edits, as JSON.
+
+        Parameters
+        ----------
+        path : str or Path
+            The file to write. Parent directories must exist.
+
+        Returns
+        -------
+        Path
+            The path the graph was written to.
+        """
+        if self._skeleton_graph is None:
+            raise ValueError("No skeleton graph is loaded.")
+        path = Path(path)
+        self._skeleton_graph.to_json_file(str(path))
+        log.info(f"Saved skeleton graph to {path}")
+        return path
+
+    def default_save_path(self) -> Path:
+        """Suggested file for saving: the loaded graph with the suffix _curated."""
+        if self.files.skeleton_graph is None:
+            return Path("skeleton_graph_curated.json")
+        loaded = Path(self.files.skeleton_graph.path)
+        if loaded.stem.endswith("_curated"):
+            return loaded
+        return loaded.with_name(f"{loaded.stem}_curated{loaded.suffix or '.json'}")
+
     def _load_skeleton(self):
         """Load the skeleton graph data."""
         if self.files.skeleton_graph:

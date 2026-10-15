@@ -87,3 +87,23 @@ def test_set_origin_unknown_node_and_undo():
     restored = manager._data.skeleton_graph.graph
     assert not restored.is_directed()
     assert restored.number_of_nodes() == 5
+
+
+def test_save_skeleton_graph(tmp_path, simple_t_skeleton_graph):
+    """The data manager saves the edited graph and suggests a _curated name."""
+    from skeleplex.app._data import DataManager, SkeletonDataPaths, SkeletonGraphFile
+
+    loaded = tmp_path / "graph.json"
+    simple_t_skeleton_graph.to_json_file(str(loaded))
+    data = DataManager(
+        file_paths=SkeletonDataPaths(skeleton_graph=SkeletonGraphFile(path=loaded))
+    )
+    assert data.default_save_path() == tmp_path / "graph_curated.json"
+
+    data.skeleton_graph.graph.remove_edge(1, 3)
+    saved = data.save_skeleton_graph(data.default_save_path())
+
+    reloaded = SkeletonGraph.from_json_file(str(saved))
+    assert set(reloaded.graph.edges) == {(0, 1), (1, 2)}
+    # the loaded file is not touched
+    assert SkeletonGraph.from_json_file(str(loaded)).graph.number_of_edges() == 3
