@@ -59,3 +59,47 @@ def test_skeletonize_chunkwise_cpu():
     ).compute()
     assert result.shape == image.shape
     np.testing.assert_allclose(result, image, atol=1e-5)
+
+
+def test_load_normal_field_model_pretrained(tmp_path, monkeypatch):
+    """"pretrained" loads the checkpoint fetched from the model registry."""
+    import pytorch_lightning as pl
+    from morphospaces.networks.skeletonization import SkeletonizationRegressionDynUNet
+
+    from skeleplex.skeleton import _utils
+    from skeleplex.skeleton._skeletonize import load_normal_field_model
+
+    # a small stand-in for the published checkpoint
+    small = SkeletonizationRegressionDynUNet(
+        in_channels=3,
+        out_channels=1,
+        kernel_size=(3, 3, 3),
+        strides=(1, 2, 2),
+        upsample_kernel_size=(2, 2),
+    )
+    checkpoint = tmp_path / "skeleton-reg-best.ckpt"
+    trainer = pl.Trainer(logger=False, enable_checkpointing=False)
+    trainer.strategy.connect(small)
+    trainer.save_checkpoint(checkpoint)
+
+    fetched = []
+
+    def fake_fetch(name):
+        fetched.append(name)
+        return str(checkpoint)
+
+    monkeypatch.setattr(_utils.NORMAL_FIELD_MODEL_REGISTRY, "fetch", fake_fetch)
+
+    model = load_normal_field_model("pretrained")
+
+    assert fetched == ["skeleton-reg-best.ckpt"]
+    assert isinstance(model, SkeletonizationRegressionDynUNet)
+    assert model.hparams.in_channels == 3
+
+
+def test_normal_field_model_registry():
+    """The registry points to the published record and has a checksum."""
+    from skeleplex.skeleton._utils import NORMAL_FIELD_MODEL_REGISTRY
+
+    assert NORMAL_FIELD_MODEL_REGISTRY.base_url == "doi:10.5281/zenodo.23396664/"
+    assert NORMAL_FIELD_MODEL_REGISTRY.registry["skeleton-reg-best.ckpt"].startswith("md5:")

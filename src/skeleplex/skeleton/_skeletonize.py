@@ -8,7 +8,11 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from skeleplex.skeleton._utils import get_skeletonization_model, make_image_5d
+from skeleplex.skeleton._utils import (
+    get_normal_field_model_path,
+    get_skeletonization_model,
+    make_image_5d,
+)
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -22,15 +26,22 @@ _AnyModel = torch.nn.Module
 # ---------------------------------------------------------------------------
 
 
-def load_normal_field_model(checkpoint_path: Path | str) -> _AnyModel:
+def load_normal_field_model(
+    checkpoint_path: Path | str = "pretrained",
+) -> _AnyModel:
     """Load a SkeletonizationRegressionDynUNet from a checkpoint.
 
     Parameters
     ----------
     checkpoint_path : Path or str
-        Path to a .ckpt file from a normal-field training run.
+        Path to a .ckpt file from a normal-field training run, or
+        "pretrained" (default) to download the published model
+        (https://doi.org/10.5281/zenodo.23396664).
     """
     from morphospaces.networks.skeletonization import SkeletonizationRegressionDynUNet
+
+    if str(checkpoint_path) == "pretrained":
+        checkpoint_path = get_normal_field_model_path()
 
     return SkeletonizationRegressionDynUNet.load_from_checkpoint(
         str(checkpoint_path),

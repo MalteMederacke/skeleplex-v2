@@ -46,7 +46,8 @@ TRAIN_CROP = {
 }
 
 # Normal-field skeleton-prediction model — a different model from the above.
-SKELETON_CHECKPOINT = PROJECT_ROOT / "log_normal_field/reg-best.ckpt"
+# "pretrained" downloads the published model; or give the path to a .ckpt file.
+SKELETON_CHECKPOINT = "pretrained"
 
 # ── acquisition ──────────────────────────────────────────────────────────────
 # Fallback for containers with no voxel_size_um attribute, (z, y, x) in um.

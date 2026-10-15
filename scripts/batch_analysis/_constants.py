@@ -91,7 +91,8 @@ TRAIN_CROP = {  # ADAPT HERE
 }
 
 # Normal-field skeleton-prediction model (segmentation_to_graph_batch.py).
-SKELETON_CHECKPOINT = Path("/path/to/project/reg-best.ckpt")  # ADAPT HERE
+# "pretrained" downloads the published model; or give the path to a .ckpt file.
+SKELETON_CHECKPOINT = "pretrained"  # ADAPT HERE
 
 # --- Acquisition ------------------------------------------------------------
 # Fallback voxel size (z, y, x) in micrometres when a container has no
