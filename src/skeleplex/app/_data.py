@@ -14,6 +14,7 @@ from pydantic.types import FilePath
 from skeleplex.graph import SkeletonGraph
 from skeleplex.graph.constants import NODE_COORDINATE_KEY
 from skeleplex.utils import line_segments_in_aabb, points_in_aabb
+from skeleplex.utils._ome_zarr import ImageInfo, image_info, open_image
 from skeleplex.visualize import EdgeColormap, line_segment_coordinates_from_spline
 
 log = logging.getLogger(__name__)
@@ -517,7 +518,12 @@ class SegmentationView:
             self._array = None
 
         elif self._mode == ViewMode.ALL:
-            self._array = np.asarray(self._data_manager._segmentation)
+            # a multiscale segmentation is streamed by the viewer as it is needed
+            self._array = (
+                None
+                if self._data_manager.segmentation_is_multiscale
+                else np.asarray(self._data_manager._segmentation)
+            )
 
             # build the transform in data (z, y, x) axis order; cellier reverses
             # to pygfx order internally.
@@ -779,6 +785,7 @@ class DataManager:
 
         # initialize the segmentation data
         self._segmentation = None
+        self._segmentation_info: ImageInfo | None = None
         self._segmentation_scale = None
 
         if self.files.has_paths() and load_data:
@@ -814,8 +821,14 @@ class DataManager:
 
     @property
     def segmentation(self) -> zarr.Array | None:
-        """Get the segmentation zarr array."""
+        """Get the segmentation zarr array, at its finest resolution."""
         return self._segmentation
+
+    @property
+    def segmentation_is_multiscale(self) -> bool:
+        """Whether the segmentation has several resolution levels."""
+        info = self._segmentation_info
+        return info is not None and info.n_levels > 1
 
     @property
     def segmentation_scale(self) -> tuple[float, float, float] | None:
@@ -823,7 +836,11 @@ class DataManager:
 
         Since the viewer coordinate system is in microns,
         this is equivalent to segmentation voxel size in micrometers.
+        The metadata of the image takes precedence if it specifies the size.
         """
+        info = self._segmentation_info
+        if info is not None and info.voxel_size:
+            return info.voxel_size
         if self.files.segmentation is not None:
             return self.files.segmentation.voxel_size_um
         return None
@@ -951,10 +968,12 @@ class DataManager:
         """Load the segmentation data."""
         if self.files.segmentation:
             log.info(f"Segmentation path set to {self.files.segmentation}")
-            self._segmentation = zarr.open(self.files.segmentation.path, mode="r")
+            self._segmentation_info = image_info(self.files.segmentation.path)
+            self._segmentation = open_image(self.files.segmentation.path)
 
         else:
             log.info("No segmentation path set.")
+            self._segmentation_info = None
             self._segmentation = None
 
     def load(self) -> None:

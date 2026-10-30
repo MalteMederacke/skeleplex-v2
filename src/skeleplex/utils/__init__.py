@@ -11,6 +11,12 @@ from skeleplex.utils._inference_slurm import (
     infer_on_chunk,
     initialize_parallel_inference,
 )
+from skeleplex.utils._ome_zarr import (
+    ImageInfo,
+    image_info,
+    open_image,
+    write_ome_zarr_labels,
+)
 
 # Names backed by torch-dependent modules. These are imported lazily (PEP 562)
 # so that importing skeleplex.utils — e.g. for the numpy-only geometry helpers
@@ -51,6 +57,10 @@ def __dir__() -> list[str]:
 
 
 __all__ = [
+    "ImageInfo",
+    "image_info",
+    "open_image",
+    "write_ome_zarr_labels",
     "FlipX",
     "FlipY",
     "FlipZ",

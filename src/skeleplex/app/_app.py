@@ -15,6 +15,7 @@ from skeleplex.app._data import (
     DataManager,
     SelectionManager,
     SkeletonDataPaths,
+    ViewMode,
 )
 from skeleplex.app._viewer_controller import ViewerController
 from skeleplex.app.actions import ACTIONS
@@ -113,10 +114,17 @@ class SkelePlexApp(Application):
             log.debug("No segmentation image loaded.")
             return
 
-        self._viewer.main_canvas.update_segmentation_image(
-            image=self.data.segmentation_view.array,
-            transform=self.data.segmentation_view.transform,
-        )
+        canvas = self._viewer.main_canvas
+        view = self.data.segmentation_view
+        if self.data.segmentation_is_multiscale and view.mode == ViewMode.ALL:
+            canvas.update_segmentation_image(image=None)
+            canvas.update_multiscale_segmentation(
+                path=self.data.files.segmentation.path, transform=view.transform
+            )
+            return
+
+        canvas.hide_multiscale_segmentation()
+        canvas.update_segmentation_image(image=view.array, transform=view.transform)
 
     def set_segmentation_opacity(self, opacity: float) -> None:
         """Set the opacity of the rendered segmentation in the main viewer."""

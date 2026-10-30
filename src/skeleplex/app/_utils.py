@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 from IPython import get_ipython
 from magicgui import magicgui
 from qtpy.QtCore import QTimer
@@ -23,6 +24,7 @@ from skeleplex.app._curate import (
     guard,
     make_split_edge_widget,
 )
+from skeleplex.utils._ome_zarr import image_info
 
 # store reference to QApplication to prevent garbage collection
 _app_ref: QApplication | None = None
@@ -31,7 +33,7 @@ _app_ref: QApplication | None = None
 def view_skeleton(
     graph_path: str,
     segmentation_path: str | None = None,
-    segmentation_voxel_size_um: tuple[float, float, float] = (1, 1, 1),
+    segmentation_voxel_size_um: tuple[float, float, float] | None = None,
     launch_widgets: bool = True,
     theme: str = "light",
 ):
@@ -42,10 +44,11 @@ def view_skeleton(
     graph_path : str
         Path to the skeleton graph JSON file.
     segmentation_path : str | None
-        Path to the segmentation image file.
-        Must be a zarr file.
-    segmentation_voxel_size_um : tuple[float, float, float]
-        The voxel size of the segmentation in micrometers.
+        Path to the segmentation image file. Either a zarr array or an
+        OME-Zarr multiscale group, which the viewer streams as it is needed.
+    segmentation_voxel_size_um : tuple[float, float, float] | None
+        The voxel size of the segmentation in micrometers. If None, the size
+        in the metadata of an OME-Zarr image is used and otherwise (1, 1, 1).
     launch_widgets : bool, optional
         Whether to launch the auxiliary widgets for curation.
         Defaults to True.
@@ -69,9 +72,21 @@ def view_skeleton(
     # load the data
     skeleton_graph_file = SkeletonGraphFile(path=Path(graph_path))
     if segmentation_path is not None:
+        metadata_voxel_size = image_info(segmentation_path).voxel_size
+        if (
+            metadata_voxel_size
+            and segmentation_voxel_size_um is not None
+            and not np.allclose(metadata_voxel_size, segmentation_voxel_size_um)
+        ):
+            raise ValueError(
+                f"The voxel size {segmentation_voxel_size_um} differs from "
+                f"{metadata_voxel_size} in the metadata of {segmentation_path}."
+            )
         segmentation_file = ImageFile(
             path=Path(segmentation_path),
-            voxel_size_um=segmentation_voxel_size_um,
+            voxel_size_um=(
+                metadata_voxel_size or segmentation_voxel_size_um or (1, 1, 1)
+            ),
         )
     else:
         segmentation_file = None

@@ -23,6 +23,7 @@ from skeleplex.graph.constants import (
 )
 from skeleplex.graph.skeleton_graph import SkeletonGraph
 from skeleplex.graph.spline import B3Spline
+from skeleplex.utils import write_ome_zarr_labels
 from skeleplex.visualize import EdgeColormap
 
 # larger than cellier's default far clipping plane (8000)
@@ -98,11 +99,11 @@ def run_in_viewer(data_paths):
     qapp = QApplication.instance() or QApplication([])
     graph_path, segmentation_path = data_paths
 
-    def _run(scenario, theme: str = "light") -> None:
+    def _run(scenario, theme: str = "light", segmentation=None) -> None:
         async def _main() -> None:
             app = view_skeleton(
                 str(graph_path),
-                segmentation_path=str(segmentation_path),
+                segmentation_path=str(segmentation or segmentation_path),
                 segmentation_voxel_size_um=(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE),
                 theme=theme,
             )
@@ -643,3 +644,85 @@ def test_theme_sets_the_window_colors(run_in_viewer):
         assert not is_dark(group)
 
     run_in_viewer(scenario)
+
+
+@pytest.fixture
+def multiscale_segmentation(data_paths):
+    """Write the test segmentation as an OME-Zarr pyramid."""
+    _, segmentation_path = data_paths
+    output_path = segmentation_path.with_name("segmentation.ome.zarr")
+    return write_ome_zarr_labels(
+        segmentation_path, output_path, (VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE), n_levels=3
+    )
+
+
+def test_multiscale_segmentation_view_modes(run_in_viewer, multiscale_segmentation):
+    """An OME-Zarr pyramid is streamed in all mode and cropped in bounding box mode."""
+
+    def _visibility(viewer) -> tuple[bool, bool]:
+        """Return if the multiscale and the in-memory visual are visible."""
+        multiscale = viewer.canvas._multiscale_segmentation.visual
+        in_memory = viewer.canvas._segmentation.visual
+        return (
+            multiscale is not None and multiscale.appearance.visible,
+            in_memory is not None and in_memory.appearance.visible,
+        )
+
+    async def scenario(viewer):
+        view = viewer.data.segmentation_view
+        assert viewer.data.segmentation_is_multiscale
+
+        view.mode = "all"
+        await viewer.settle(1.5)
+        components = viewer.canvas._multiscale_segmentation
+        assert view.array is None
+        assert _visibility(viewer) == (True, False)
+        assert components.data_store.n_levels == 3
+        assert np.allclose(
+            np.diag(components.visual.transform.matrix),
+            (VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE, 1),
+        )
+        assert components.visual.appearance.opacity == pytest.approx(0.3)
+
+        # node 1 is inside of label 1, drawn over the skeleton
+        viewer.data.selection.node.enabled = True
+        await viewer.settle()
+        await viewer.click(viewer.node_position(1))
+        assert viewer.data.selection.node.values == {1}
+
+        controls = viewer.app._main_window.app_controls.widget()
+        controls.segmentation_view_box.opacity_changed.emit(0.75)
+        assert components.visual.appearance.opacity == pytest.approx(0.75)
+
+        view.bounding_box._min_coordinate = np.array([7000.0, 7000.0, 7000.0])
+        view.bounding_box._max_coordinate = np.array([13000.0, 13000.0, 13000.0])
+        view.mode = "bounding_box"
+        await viewer.settle(1.0)
+        assert _visibility(viewer) == (False, True)
+        assert viewer.canvas._segmentation.data_store.data.shape == (60, 60, 60)
+        assert viewer.canvas._segmentation.visual.appearance.opacity == pytest.approx(
+            0.75
+        )
+
+        view.mode = "none"
+        await viewer.settle()
+        assert _visibility(viewer) == (False, False)
+
+        view.mode = "all"
+        await viewer.settle(1.0)
+        assert _visibility(viewer) == (True, False)
+
+    run_in_viewer(scenario, segmentation=multiscale_segmentation)
+
+
+def test_conflicting_voxel_size_is_refused(data_paths, multiscale_segmentation):
+    """A voxel size that differs from the metadata raises instead of being ignored."""
+    from skeleplex.app import view_skeleton
+
+    graph_path, _ = data_paths
+    with pytest.raises(ValueError, match="differs"):
+        view_skeleton(
+            str(graph_path),
+            segmentation_path=str(multiscale_segmentation),
+            segmentation_voxel_size_um=(1.0, 1.0, 1.0),
+        )

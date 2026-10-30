@@ -2,12 +2,13 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import numpy as np
 import pygfx as gfx
 from cellier.controller import CellierController
-from cellier.data.label import LabelMemoryStore
+from cellier.data.label import LabelMemoryStore, OMEZarrLabelDataStore
 from cellier.data.lines import LinesMemoryStore
 from cellier.data.points import PointsMemoryStore
 from cellier.events import LinesPickEvent, PointsPickEvent
@@ -18,6 +19,8 @@ from cellier.visuals import (
     LabelMemoryVisual,
     LinesMemoryAppearance,
     LinesVisual,
+    MultiscaleLabelsAppearance,
+    MultiscaleLabelVisual,
     PointsMarkerAppearance,
     PointsVisual,
 )
@@ -77,14 +80,13 @@ class RenderedSkeletonComponents:
 class RenderedSegmentationComponents:
     """A class for storing the components for a rendered segmentation.
 
-    ``data_store`` / ``visual`` are typed for the in-memory label path today.
-    The multiscale path (a ``MultiscaleLabelVisual`` + a multiscale label store)
-    slots in behind the same two fields via a future
-    ``add_multiscale_segmentation`` method; only the constructor call differs.
+    It holds either the in-memory or the multiscale pair of store and visual.
+    ``path`` is the path of a multiscale store, used to notice when it changes.
     """
 
-    data_store: LabelMemoryStore | None = None
-    visual: LabelMemoryVisual | None = None
+    data_store: LabelMemoryStore | OMEZarrLabelDataStore | None = None
+    visual: LabelMemoryVisual | MultiscaleLabelVisual | None = None
+    path: Path | None = None
 
 
 class MainCanvasController:
@@ -103,6 +105,8 @@ class MainCanvasController:
         # this will store the rendered skeleton components
         self._skeleton = RenderedSkeletonComponents()
         self._segmentation = RenderedSegmentationComponents()
+        self._multiscale_segmentation = RenderedSegmentationComponents()
+        self._segmentation_opacity = DEFAULT_SEGMENTATION_OPACITY
 
         # map a user callback -> list of (SubscriptionHandle, closure) pairs.
         # the closure is retained so the strong reference outlives registration.
@@ -355,7 +359,7 @@ class MainCanvasController:
                 # being distance-sorted against the other visuals — this avoids
                 # the composite-order "pop" when orbiting the camera.
                 appearance=InMemoryLabelsAppearance(
-                    opacity=DEFAULT_SEGMENTATION_OPACITY,
+                    opacity=self._segmentation_opacity,
                     transparency_mode="weighted_blend",
                     depth_write=False,
                     render_order=2,
@@ -374,29 +378,82 @@ class MainCanvasController:
             # is visible again now that there is data to show.
             self._backend.set_visual_visible(self._segmentation.visual.id, visible=True)
 
-        # transform is an evented field on the live model; assignment fires
-        # the psygnal event the controller wired, which reslices the scene.
-        # A transform names the spaces it maps between, so it is built after
-        # add_labels has given the store its coordinate system.
-        store_coordinates = self._segmentation.data_store.data_coordinate_systems[0]
-        scene = self._backend.get_scene(self._scene_id)
-        self._segmentation.visual.transform = AffineTransform.from_matrix(
-            np.eye(4) if transform is None else transform,
-            input_coordinate_system=store_coordinates,
-            output_coordinate_system=scene.dims.world_coordinate_system,
-        )
-
-        # Future: add_multiscale_segmentation(self, store, ...)
-        #   store  = <multiscale label store>(...)              # larger-than-memory
-        #   visual = self._backend.add_labels_multiscale(
-        #       data=store, scene_id=self._scene_id,
-        #       appearance=MultiscaleLabelsAppearance(),
-        #   )
-        # The two RenderedSegmentationComponents fields hold the multiscale
-        # store/visual unchanged; only the constructor call differs.
+        self._set_segmentation_transform(self._segmentation, transform)
 
         # reslice the scene
         self._backend.reslice_scene(self._scene_id)
+
+    def update_multiscale_segmentation(
+        self, path: Path, transform: np.ndarray | None = None
+    ) -> None:
+        """Show a multiscale segmentation, streaming the levels the view needs.
+
+        Parameters
+        ----------
+        path : Path
+            The path to the OME-Zarr multiscale group.
+        transform : np.ndarray | None
+            The 4x4 affine transform from voxels of the finest level to world
+            coordinates, in data (z, y, x) axis order.
+        """
+        components = self._multiscale_segmentation
+        path = Path(path)
+        if components.visual is not None and components.path != path:
+            self._backend.remove_visual(components.visual.id)
+            self._backend.remove_data_store(components.data_store.id)
+            components = RenderedSegmentationComponents()
+            self._multiscale_segmentation = components
+
+        if components.visual is None:
+            components.path = path
+            components.data_store = OMEZarrLabelDataStore.from_path(
+                path.absolute().as_uri(), name="label_image"
+            )
+            # same transparency and picking as the in-memory path, see
+            # update_segmentation_image for why.
+            components.visual = self._backend.add_labels_multiscale(
+                data=components.data_store,
+                scene_id=self._scene_id,
+                appearance=MultiscaleLabelsAppearance(
+                    opacity=self._segmentation_opacity,
+                    transparency_mode="weighted_blend",
+                    depth_write=False,
+                    render_order=2,
+                ),
+                name="labels_node",
+                pick_write=False,
+            )
+        else:
+            self._backend.set_visual_visible(components.visual.id, visible=True)
+
+        self._set_segmentation_transform(components, transform)
+        self._backend.reslice_scene(self._scene_id)
+
+    def hide_multiscale_segmentation(self) -> None:
+        """Hide the multiscale segmentation, if there is one."""
+        if self._multiscale_segmentation.visual is not None:
+            self._backend.set_visual_visible(
+                self._multiscale_segmentation.visual.id, visible=False
+            )
+
+    def _set_segmentation_transform(
+        self,
+        components: RenderedSegmentationComponents,
+        transform: np.ndarray | None,
+    ) -> None:
+        """Set the data to world transform of a rendered segmentation.
+
+        transform is an evented field on the live model; assignment fires the
+        psygnal event the controller wired, which reslices the scene. A transform
+        names the spaces it maps between, so it is built after the visual was
+        added, which gives the store its coordinate system.
+        """
+        scene = self._backend.get_scene(self._scene_id)
+        components.visual.transform = AffineTransform.from_matrix(
+            np.eye(4) if transform is None else transform,
+            input_coordinate_system=components.data_store.data_coordinate_systems[0],
+            output_coordinate_system=scene.dims.world_coordinate_system,
+        )
 
     def set_theme(self, theme: ViewerTheme) -> None:
         """Set the background and node colors of the scene.
@@ -421,13 +478,14 @@ class MainCanvasController:
         ----------
         opacity : float
             The opacity in the range [0, 1]. 0 is fully transparent, 1 is
-            fully opaque. Has no effect if no segmentation has been rendered.
+            fully opaque. It also applies to a segmentation rendered later.
         """
-        if self._segmentation.visual is None:
-            return
-        self._backend.update_appearance_field(
-            self._segmentation.visual.id, "opacity", float(opacity)
-        )
+        self._segmentation_opacity = float(opacity)
+        for components in (self._segmentation, self._multiscale_segmentation):
+            if components.visual is not None:
+                self._backend.update_appearance_field(
+                    components.visual.id, "opacity", self._segmentation_opacity
+                )
 
     def look_at_skeleton(
         self,
