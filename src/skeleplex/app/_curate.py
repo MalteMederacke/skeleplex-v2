@@ -13,7 +13,7 @@ import networkx as nx
 import numpy as np
 from magicgui import magicgui
 from magicgui.widgets import PushButton
-from qtpy.QtCore import QByteArray
+from qtpy.QtCore import QByteArray, Qt
 from qtpy.QtGui import QPixmap
 from qtpy.QtWidgets import (
     QCheckBox,
@@ -723,7 +723,7 @@ class RenderAroundNodeWidget(QWidget):
         layout.addWidget(self._status_label)
         self.setLayout(layout)
 
-        viewer.add_auxiliary_widget(self, name="Render around node")
+        viewer.add_auxiliary_widget(self, name="Around node")
 
     def _set_status(self, msg: str) -> None:
         self._status_label.setText(msg)
@@ -875,7 +875,7 @@ class BreakDetectionWidget(QWidget):
         layout.addWidget(self._status_label)
         self.setLayout(layout)
 
-        viewer.add_auxiliary_widget(self, name="Break Detection")
+        viewer.add_auxiliary_widget(self, name="Breaks", tabify_with="Around node")
 
     def _set_status(self, msg: str) -> None:
         self._status_label.setText(msg)
@@ -1050,7 +1050,6 @@ class ConnectedComponentsWidget(QWidget):
     _MAIN_COLOR = np.array([0.0, 0.4, 1.0, 1.0], dtype=np.float32)
     _OTHER_COLOR = np.array([1.0, 0.5, 0.0, 1.0], dtype=np.float32)
     _HIDDEN_COLOR = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float32)
-    _DEFAULT_COLOR = np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
 
     def __init__(self, viewer) -> None:
         super().__init__()
@@ -1090,7 +1089,7 @@ class ConnectedComponentsWidget(QWidget):
         layout.addWidget(self._reset_button)
         self.setLayout(layout)
 
-        viewer.add_auxiliary_widget(self, name="Connected Components")
+        viewer.add_auxiliary_widget(self, name="Components", tabify_with="Around node")
 
     def _set_status(self, msg: str) -> None:
         self._status_label.setText(msg)
@@ -1172,10 +1171,7 @@ class ConnectedComponentsWidget(QWidget):
     @guard
     def _on_reset_clicked(self) -> None:
         try:
-            self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
-                colormap={},
-                default_color=self._DEFAULT_COLOR,
-            )
+            self.viewer.reset_edge_colormap()
             self._set_status("")
         except Exception as e:
             self._set_status(f"Reset error: {e}")
@@ -1279,6 +1275,10 @@ def make_split_edge_widget(viewer):
     split_edge_widget.point_visual.appearance.visible = False
 
     return split_edge_widget
+
+
+#: The width of the colorbar in the ChangeBranchColorWidget in pixels.
+COLORBAR_WIDTH = 240
 
 
 class ChangeBranchColorWidget(QWidget):
@@ -1456,7 +1456,12 @@ class ChangeBranchColorWidget(QWidget):
 
         pixmap = QPixmap()
         pixmap.loadFromData(QByteArray(buf.getvalue()))
-        self.colorbar_label.setPixmap(pixmap)
+        # the image is rendered larger than the panel it has to fit in
+        self.colorbar_label.setPixmap(
+            pixmap.scaledToWidth(
+                COLORBAR_WIDTH, Qt.TransformationMode.SmoothTransformation
+            )
+        )
 
 
 def get_reachable_edges(
@@ -1559,7 +1564,6 @@ class RenderReachableEdgesWidget(QWidget):
     _REACHABLE_COLOR = np.array([0.3, 0.3, 0.8, 1.0], dtype=np.float32)
     _TERMINAL_COLOR = np.array([1.0, 0.65, 0.0, 1.0], dtype=np.float32)
     _OTHER_COLOR = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float32)
-    _DEFAULT_BLUE = np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
 
     def __init__(self, viewer) -> None:
         super().__init__()
@@ -1594,7 +1598,7 @@ class RenderReachableEdgesWidget(QWidget):
         layout.addWidget(self._status_label)
         self.setLayout(layout)
 
-        viewer.add_auxiliary_widget(self, name="Render Reachable Edges")
+        viewer.add_auxiliary_widget(self, name="Reachable")
 
     def _set_status(self, msg: str) -> None:
         self._status_label.setText(msg)
@@ -1649,12 +1653,9 @@ class RenderReachableEdgesWidget(QWidget):
 
     @guard
     def _on_reset_clicked(self) -> None:
-        """Restore the default uniform blue colormap."""
+        """Restore the default uniform colormap of the current theme."""
         try:
-            self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
-                colormap={},
-                default_color=self._DEFAULT_BLUE,
-            )
+            self.viewer.reset_edge_colormap()
             self._set_status("")
         except Exception as e:
             self._set_status(f"Reset error: {e}")
@@ -1681,7 +1682,6 @@ class HighLevelPathWidget(QWidget):
     _PATH_COLOR = np.array([0.3, 0.3, 0.8, 1.0], dtype=np.float32)
     _SHORTEST_COLOR = np.array([1.0, 0.0, 0.0, 1.0], dtype=np.float32)
     _OTHER_COLOR = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float32)
-    _DEFAULT_BLUE = np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32)
 
     def __init__(self, viewer) -> None:
         super().__init__()
@@ -1718,7 +1718,7 @@ class HighLevelPathWidget(QWidget):
         layout.addWidget(self._status_label)
         self.setLayout(layout)
 
-        viewer.add_auxiliary_widget(self, name="Deep Path Finder")
+        viewer.add_auxiliary_widget(self, name="Paths", tabify_with="Reachable")
 
     def _set_status(self, msg: str) -> None:
         self._status_label.setText(msg)
@@ -1858,12 +1858,9 @@ class HighLevelPathWidget(QWidget):
 
     @guard
     def _on_reset_clicked(self) -> None:
-        """Restore the default uniform blue colormap."""
+        """Restore the default uniform colormap of the current theme."""
         try:
-            self.viewer.data.edge_colormap = EdgeColormap.from_arrays(
-                colormap={},
-                default_color=self._DEFAULT_BLUE,
-            )
+            self.viewer.reset_edge_colormap()
             self._set_status("")
         except Exception as e:
             self._set_status(f"Reset error: {e}")
@@ -1918,7 +1915,7 @@ def change_color_attr(
     # update
     edge_colormap = EdgeColormap.from_arrays(
         colormap=color_dict,
-        default_color=np.array([0, 0, 0, 1], dtype=np.float32),
+        default_color=np.array(viewer.theme.missing_edge_color, dtype=np.float32),
     )
     viewer.data.edge_colormap = edge_colormap
 
@@ -1984,11 +1981,11 @@ def filter_edges_by_attribute(
             color_dict[edge] = np.array([0, 0, 0, 0], dtype=np.float32)  # Transparent
         else:
             color_dict[edge] = color_dict.get(
-                edge, np.array([0, 0, 0, 1], dtype=np.float32)
+                edge, np.array(viewer.theme.missing_edge_color, dtype=np.float32)
             )
 
     edge_colormap = EdgeColormap.from_arrays(
         colormap=color_dict,
-        default_color=np.array([0, 0, 0, 1], dtype=np.float32),
+        default_color=np.array(viewer.theme.missing_edge_color, dtype=np.float32),
     )
     viewer.data.edge_colormap = edge_colormap

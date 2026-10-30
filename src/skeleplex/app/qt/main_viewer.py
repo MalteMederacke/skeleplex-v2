@@ -13,7 +13,7 @@ class MainViewerFrame(QFrame):
     def __init__(self, parent: QWidget):
         super().__init__(parent=parent)
 
-        self.setStyleSheet("border: 1px solid black;")
+        self.setStyleSheet("border: 1px solid palette(dark);")
 
         # set the minimum height
         self.setMinimumHeight(self.MINIMUM_HEIGHT)
@@ -84,7 +84,7 @@ class MainViewerWidget(QWidget):
 
         layout = QVBoxLayout()
         layout.setContentsMargins(10, 5, 10, 0)
-        layout.addWidget(self.main_viewer_frame)
+        layout.addWidget(self.main_viewer_frame, stretch=1)
         layout.addWidget(self.main_viewer_controls)
         self.setLayout(layout)
 

@@ -49,7 +49,7 @@ pip install "git+https://github.com/kevinyamauchi/skeleplex-v2.git#egg=skeleplex
 
 ### System Requirements
 
-- Python 3.11+
+- Python 3.11+ (3.12+ for the viewer application)
 - For large datasets: Sufficient RAM or `.zarr` format support
 - For the neural networks access to a GPU is recommended
 - For interactive viewing: OpenGL-compatible graphics
@@ -149,7 +149,7 @@ If you segmented the tissue of a branch and are interested to measure tissue thi
 
 2. **Create Environment** (recommended)
    ```bash
-   conda create -n skeleplex python=3.11
+   conda create -n skeleplex python=3.12
    conda activate skeleplex
    ```
 

@@ -1055,8 +1055,9 @@ class DataManager:
 
         Parameters
         ----------
-        event : cellier.events.CanvasMousePress3DEvent
-            The 3D canvas press event from cellier.
+        event : cellier.events.LinesPickEvent | cellier.events.CanvasMousePress3DEvent
+            The event from cellier: a pick event when a skeleton visual was
+            clicked, a press event when click_source is "background".
         click_source : str
             The source of the click event. One of "data" (the main visual),
             "highlight" (the highlight visual), or "background" (empty space or a
@@ -1074,14 +1075,9 @@ class DataManager:
                 self.selection.edge.events.values.emit(self.selection.edge.values)
             return
 
-        pick = event.pick_info
-        if pick.details is None:
-            # no element-level pick info; nothing to select
-            return
-
         # LinesPickInfo.edge_index is the store segment index; edge_keys is
         # per-vertex, so the two vertices of segment s share edge_keys[2 * s].
-        edge_index = pick.details.edge_index
+        edge_index = event.pick_info.edge_index
 
         # get the edge key from the edge index
         if click_source == "data":
@@ -1108,8 +1104,9 @@ class DataManager:
 
         Parameters
         ----------
-        event : cellier.events.CanvasMousePress3DEvent
-            The 3D canvas press event from cellier.
+        event : cellier.events.PointsPickEvent | cellier.events.CanvasMousePress3DEvent
+            The event from cellier: a pick event when a skeleton visual was
+            clicked, a press event when click_source is "background".
         click_source : str
             The source of the click event. One of "data" (the main visual),
             "highlight" (the highlight visual), or "background" (empty space or a
@@ -1127,13 +1124,8 @@ class DataManager:
                 self.selection.node.events.values.emit(self.selection.node.values)
             return
 
-        pick = event.pick_info
-        if pick.details is None:
-            # no element-level pick info; nothing to select
-            return
-
         # PointsPickInfo.point_index is 1:1 with node_keys
-        point_index = pick.details.point_index
+        point_index = event.pick_info.point_index
 
         # get the node key from the point index
         if click_source == "data":

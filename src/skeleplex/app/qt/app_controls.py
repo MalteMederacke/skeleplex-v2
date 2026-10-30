@@ -16,6 +16,7 @@ from qtpy.QtWidgets import (
     QLineEdit,
     QPushButton,
     QRadioButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -39,33 +40,69 @@ from skeleplex.app.qt.styles import (
 
 GROUP_BOX_STYLE = """
 QGroupBox {
-    background-color: #D5D6D7;
-    border: 1px solid black;
+    background-color: palette(alternate-base);
+    border: 1px solid palette(dark);
     margin-top: 8px;
 }
 QGroupBox::title {
     subcontrol-origin: margin;
     left: 7px;
     padding: 0px 5px 0px 5px;
-    background-color: #D5D6D7;
+    background-color: palette(alternate-base);
 }
 QRadioButton {
-    background-color: #D5D6D7;
+    background-color: palette(alternate-base);
 }
 
 QLineEdit {
-    border: 2px solid #E5E6E8;
-    border-radius: 4px;
-    padding: 4px;
+    border: 1px solid palette(dark);
+    border-radius: 3px;
+    padding: 2px;
+    background-color: palette(base);
 }
 
 QDoubleSpinBox {
-    border: 2px solid #E5E6E8;
-    border-radius: 4px;
-    background-color: #EBECED;
+    border: 1px solid palette(dark);
+    border-radius: 3px;
+    background-color: palette(base);
 }
 """
-# f3f3f3
+
+
+def make_scroll_area(widget: QWidget, parent: QWidget | None = None) -> QScrollArea:
+    """Wrap a widget so that it can shrink below its height, by scrolling.
+
+    Parameters
+    ----------
+    widget : QWidget
+        The widget to wrap.
+    parent : QWidget | None
+        The parent of the scroll area. The default is None.
+
+    Returns
+    -------
+    QScrollArea
+        The scroll area. It is as wide as the widget needs.
+    """
+    minimum_width = widget.minimumSizeHint().width()
+
+    # the stretch keeps the widget at its own height when there is space left
+    contents = QWidget()
+    contents_layout = QVBoxLayout()
+    contents_layout.setContentsMargins(0, 0, 0, 0)
+    contents_layout.addWidget(widget)
+    contents_layout.addStretch()
+    contents.setLayout(contents_layout)
+
+    scroll_area = QScrollArea(parent=parent)
+    scroll_area.setWidget(contents)
+    scroll_area.setWidgetResizable(True)
+    scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+    scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    scroll_area.setMinimumWidth(
+        minimum_width + scroll_area.verticalScrollBar().sizeHint().width()
+    )
+    return scroll_area
 
 
 class ViewAllModeControls(QGroupBox):
@@ -549,15 +586,22 @@ class AppControlsWidget(QWidget):
         self.selection_box = DataSelectorWidget(collapsible=True, parent=self)
 
         # make the layout
+        contents = QWidget(parent=self)
+        contents_layout = QVBoxLayout()
+        contents_layout.setContentsMargins(4, 4, 4, 4)
+        contents_layout.setSpacing(4)
+        contents_layout.addWidget(stores_box)
+        contents_layout.addWidget(self.skeleton_view_box)
+        contents_layout.addWidget(self.segmentation_view_box)
+        contents_layout.addWidget(self.selection_box)
+        contents_layout.addStretch()
+        contents_layout.setAlignment(Qt.AlignTop)
+        contents.setLayout(contents_layout)
+
+        # the controls are taller than a laptop screen when all are expanded
         layout = QVBoxLayout()
-        layout.addWidget(stores_box)
-        layout.addWidget(self.skeleton_view_box)
-        layout.addWidget(self.segmentation_view_box)
-        layout.addWidget(self.selection_box)
-        layout.addStretch()
-
-        layout.setAlignment(Qt.AlignTop)
-
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(make_scroll_area(contents, parent=self))
         self.setLayout(layout)
 
 

@@ -7,8 +7,9 @@ from app_model import Application
 from app_model.types import Action, KeyBindingRule, KeyCode, KeyMod, MenuRule
 from cellier.data.points import PointsMemoryStore
 from cellier.visuals import PointsMarkerAppearance, PointsVisual
+from cmap import Color
 
-from skeleplex.app._constants import CommandId, MenuId
+from skeleplex.app._constants import THEMES, CommandId, MenuId, ViewerTheme
 from skeleplex.app._curate import CurationManager
 from skeleplex.app._data import (
     DataManager,
@@ -18,6 +19,7 @@ from skeleplex.app._data import (
 from skeleplex.app._viewer_controller import ViewerController
 from skeleplex.app.actions import ACTIONS
 from skeleplex.app.qt import MainWindow
+from skeleplex.visualize import EdgeColormap
 
 log = logging.getLogger(__name__)
 
@@ -26,9 +28,15 @@ class SkelePlexApp(Application):
     """The main application class."""
 
     def __init__(
-        self, data: DataManager | None = None, selection: SelectionManager | None = None
+        self,
+        data: DataManager | None = None,
+        selection: SelectionManager | None = None,
+        theme: str = "light",
     ) -> None:
         super().__init__("SkelePlex")
+
+        # the default edge colormap of the DataManager matches the light theme
+        self._theme = THEMES["light"]
 
         # make the data model
         if data is None:
@@ -53,7 +61,9 @@ class SkelePlexApp(Application):
             app=self,
         )
         # This will build a menu bar based on these menus
-        self._main_window.setModelMenuBar([MenuId.FILE, MenuId.EDIT, MenuId.DATA])
+        self._main_window.setModelMenuBar(
+            [MenuId.FILE, MenuId.EDIT, MenuId.DATA, MenuId.VIEW]
+        )
 
         # create the render canvas now that the parent widget exists
         widget = self._viewer.create_main_canvas(
@@ -70,6 +80,8 @@ class SkelePlexApp(Application):
         # update the data views
         self.data.skeleton_view.update()
         self.data.segmentation_view.update()
+
+        self.set_theme(theme)
 
     @property
     def data(self) -> DataManager:
@@ -109,6 +121,46 @@ class SkelePlexApp(Application):
     def set_segmentation_opacity(self, opacity: float) -> None:
         """Set the opacity of the rendered segmentation in the main viewer."""
         self._viewer.main_canvas.set_segmentation_opacity(opacity)
+
+    @property
+    def theme(self) -> ViewerTheme:
+        """Get the current theme of the viewer."""
+        return self._theme
+
+    def set_theme(self, name: str) -> None:
+        """Set the theme of the viewer.
+
+        This sets the colors of the canvas and of the window around it. Edges
+        drawn with the default color follow the theme. Colors applied with a
+        colormap are kept.
+
+        Parameters
+        ----------
+        name : str
+            The name of the theme, either "light" or "dark".
+        """
+        previous_theme, self._theme = self._theme, THEMES[name]
+        self._viewer.main_canvas.set_theme(self._theme)
+        self._main_window.apply_theme(self._theme)
+
+        colormap = self.data.edge_colormap
+        if self._theme is not previous_theme and colormap.default_color == Color(
+            previous_theme.edge_color
+        ):
+            self.data.edge_colormap = EdgeColormap(
+                colormap=colormap.colormap,
+                default_color=Color(self._theme.edge_color),
+            )
+
+    def toggle_theme(self) -> None:
+        """Switch between the light and the dark theme."""
+        self.set_theme("light" if self._theme is THEMES["dark"] else "dark")
+
+    def reset_edge_colormap(self) -> None:
+        """Draw all edges in the default color of the current theme."""
+        self.data.edge_colormap = EdgeColormap(
+            colormap={}, default_color=Color(self._theme.edge_color)
+        )
 
     def look_at_skeleton(self) -> None:
         """Set the camera in the main viewer to look at the skeleton."""
@@ -232,6 +284,19 @@ class SkelePlexApp(Application):
                 # create_main_canvas, so main_canvas is not yet available here.
                 callback=self.look_at_skeleton,
                 menus=[MenuRule(id=MenuId.DATA)],
+            )
+        )
+
+        self.register_action(
+            Action(
+                id=CommandId.TOGGLE_THEME,
+                title="Toggle dark mode",
+                icon="fa6-solid:circle-half-stroke",
+                callback=self.toggle_theme,
+                menus=[MenuRule(id=MenuId.VIEW)],
+                keybindings=[
+                    KeyBindingRule(primary=KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyL)
+                ],
             )
         )
 

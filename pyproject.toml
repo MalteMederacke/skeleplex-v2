@@ -60,7 +60,8 @@ dependencies = [
 # for visualization
 napari = ["napari[pyside6,optional]"]
 cellier = [
-    "cellier[pyside]>=0.0.23,<0.0.27",  # 0.0.27+ changed the scene and coordinate system API
+    # cellier requires python 3.12; without it the rest of skeleplex still installs
+    "cellier[pyside]>=0.0.29,<0.0.30; python_version >= '3.12'",
     "wgpu>=0.31.0",
     "qasync>=0.28.0",
 ]

@@ -33,6 +33,7 @@ def view_skeleton(
     segmentation_path: str | None = None,
     segmentation_voxel_size_um: tuple[float, float, float] = (1, 1, 1),
     launch_widgets: bool = True,
+    theme: str = "light",
 ):
     """Launch the skeleton viewer application.
 
@@ -48,6 +49,9 @@ def view_skeleton(
     launch_widgets : bool, optional
         Whether to launch the auxiliary widgets for curation.
         Defaults to True.
+    theme : str, optional
+        The theme of the viewer, either "light" or "dark".
+        It can be switched in the View menu. Defaults to "light".
 
     Returns
     -------
@@ -79,7 +83,7 @@ def view_skeleton(
     )
 
     # make the viewer
-    viewer = SkelePlexApp(data=data_manager)
+    viewer = SkelePlexApp(data=data_manager, theme=theme)
     viewer.show()
 
     # The scene is built and resliced during SkelePlexApp construction, before
@@ -104,8 +108,6 @@ def view_skeleton(
             delete_edge_widget = magicgui(
                 guard(viewer.curate.delete_edge),
             )
-            _ = RenderAroundNodeWidget(viewer)
-
             connect_without_merging_widget = magicgui(
                 guard(viewer.curate.connect_without_merging),
             )
@@ -116,22 +118,33 @@ def view_skeleton(
 
             ChangeBranchColorWidget(viewer)
             SetOriginWidget(viewer)
+
+            # add to viewer. The rows of tabs are stacked in the order they are
+            # added, and each row groups the widgets that belong together.
+            viewer.add_auxiliary_widget(undo_widget.native, name="Undo")
+            viewer.add_auxiliary_widget(
+                delete_edge_widget.native, name="Delete", tabify_with="Undo"
+            )
+            viewer.add_auxiliary_widget(
+                split_edge_widget.native, name="Split", tabify_with="Undo"
+            )
+
+            viewer.add_auxiliary_widget(
+                connect_without_merging_widget.native, name="Connect"
+            )
+            viewer.add_auxiliary_widget(
+                connect_with_merging_widget.native,
+                name="Merge",
+                tabify_with="Connect",
+            )
+
+            RenderAroundNodeWidget(viewer)
             ConnectedComponentsWidget(viewer)
             # BreakDetectionWidget(viewer)
 
-            # add to viewer
-            viewer.add_auxiliary_widget(undo_widget.native, name="Undo")
-            viewer.add_auxiliary_widget(delete_edge_widget.native, name="Delete edge")
-
-            viewer.add_auxiliary_widget(
-                connect_without_merging_widget.native, name="Connect without merging"
-            )
-            viewer.add_auxiliary_widget(
-                connect_with_merging_widget.native, name="Connect with merging"
-            )
-            viewer.add_auxiliary_widget(split_edge_widget.native, name="Split edge")
             RenderReachableEdgesWidget(viewer)
             HighLevelPathWidget(viewer)
+            viewer._main_window.fit_panels()
 
         except Exception as e:
             print(f"Error launching widgets: {e}")

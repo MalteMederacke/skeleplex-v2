@@ -11,6 +11,7 @@ from qtpy.QtWidgets import (
 from skeleplex.app.qt.styles import (
     FLAT_FRAME_STYLE,
     FLAT_TITLE_STYLE,
+    shade_color,
 )
 
 
@@ -86,7 +87,7 @@ class FlatVGroupBox(QWidget):
     background_color : str
         The background color for the group box.
         Color should be a hex string.
-        The default is "#f3f3f3".
+        The default is the group color of the theme.
     parent : QWidget | None
         The parent widget. The default is None.
     """
@@ -95,7 +96,7 @@ class FlatVGroupBox(QWidget):
         self,
         title: str = "",
         accent_color: str = "#b7e2d8",
-        background_color: str = "#D5D6D7",
+        background_color: str = "palette(alternate-base)",
         collapsible: bool = False,
         parent: QWidget | None = None,
     ):
@@ -108,9 +109,8 @@ class FlatVGroupBox(QWidget):
         self.setStyleSheet(f"background-color: {background_color};")
 
         self.title_widget = QLabel(title, parent=self)
-        self.title_widget.setStyleSheet(
-            FLAT_TITLE_STYLE.format(accent_color=accent_color)
-        )
+        self._accent_color = accent_color
+        self.set_title_shade(1.0)
 
         # add an callback to toggle the collapsed state when
         # the title is clicked.
@@ -126,6 +126,18 @@ class FlatVGroupBox(QWidget):
         layout.addWidget(self.frame)
         layout.addStretch()
         self.setLayout(layout)
+
+    def set_title_shade(self, shade: float) -> None:
+        """Scale the brightness of the accent color of the title.
+
+        Parameters
+        ----------
+        shade : float
+            The factor applied to the accent color.
+        """
+        self.title_widget.setStyleSheet(
+            FLAT_TITLE_STYLE.format(accent_color=shade_color(self._accent_color, shade))
+        )
 
     def add_widget(self, widget: QWidget):
         """Add a widget to the group box.
@@ -174,7 +186,7 @@ class FlatHGroupBox(QWidget):
     background_color : str
         The background color for the group box.
         Color should be a hex string.
-        The default is "#f3f3f3".
+        The default is the group color of the theme.
     parent : QWidget | None
         The parent widget. The default is None.
     """
@@ -183,7 +195,7 @@ class FlatHGroupBox(QWidget):
         self,
         title: str = "",
         accent_color: str = "#b7e2d8",
-        background_color: str = "#D5D6D7",
+        background_color: str = "palette(alternate-base)",
         collapsible: bool = False,
         parent: QWidget | None = None,
     ):
@@ -196,9 +208,8 @@ class FlatHGroupBox(QWidget):
         self.setStyleSheet(f"background-color: {background_color};")
 
         self.title_widget = QLabel(title, parent=self)
-        self.title_widget.setStyleSheet(
-            FLAT_TITLE_STYLE.format(accent_color=accent_color)
-        )
+        self._accent_color = accent_color
+        self.set_title_shade(1.0)
 
         # add an callback to toggle the collapsed state when
         # the title is clicked.
@@ -214,6 +225,18 @@ class FlatHGroupBox(QWidget):
         layout.addWidget(self.frame)
         layout.addStretch()
         self.setLayout(layout)
+
+    def set_title_shade(self, shade: float) -> None:
+        """Scale the brightness of the accent color of the title.
+
+        Parameters
+        ----------
+        shade : float
+            The factor applied to the accent color.
+        """
+        self.title_widget.setStyleSheet(
+            FLAT_TITLE_STYLE.format(accent_color=shade_color(self._accent_color, shade))
+        )
 
     def add_widget(self, widget: QWidget):
         """Add a widget to the group box.
