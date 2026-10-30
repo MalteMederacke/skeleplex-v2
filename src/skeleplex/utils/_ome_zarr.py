@@ -25,6 +25,10 @@ class ImageInfo:
     voxel_size : tuple[float, ...] | None
         The size of a voxel of the finest level along each spatial axis.
         None if the image does not specify it, like a plain zarr array.
+    translation : tuple[float, ...] | None
+        The position of the center of the first voxel of the finest level along
+        each spatial axis, in the units of voxel_size. None if the image does
+        not specify it, like a plain zarr array.
     level_paths : tuple[str, ...]
         The path of each level in the group, from fine to coarse.
         This is empty for a plain zarr array.
@@ -32,6 +36,7 @@ class ImageInfo:
 
     n_levels: int
     voxel_size: tuple[float, ...] | None
+    translation: tuple[float, ...] | None
     level_paths: tuple[str, ...]
 
 
@@ -54,6 +59,14 @@ def _get_scale(transformations: list[dict] | None, n_axes: int) -> list[float]:
     return [1.0] * n_axes
 
 
+def _get_translation(transformations: list[dict] | None, n_axes: int) -> list[float]:
+    """Return the translation in a list of OME-Zarr coordinate transformations."""
+    for transformation in transformations or []:
+        if transformation.get("type") == "translation":
+            return list(transformation["translation"])
+    return [0.0] * n_axes
+
+
 def image_info(path: str | Path) -> ImageInfo:
     """Read the information about an image from a zarr or OME-Zarr path.
 
@@ -74,7 +87,7 @@ def image_info(path: str | Path) -> ImageInfo:
     """
     node = zarr.open(str(path), mode="r")
     if isinstance(node, zarr.Array):
-        return ImageInfo(n_levels=1, voxel_size=None, level_paths=())
+        return ImageInfo(n_levels=1, voxel_size=None, translation=None, level_paths=())
 
     multiscale = _get_multiscale(dict(node.attrs))
     if multiscale is None:
@@ -86,16 +99,36 @@ def image_info(path: str | Path) -> ImageInfo:
 
     datasets = multiscale["datasets"]
     axes = multiscale["axes"]
-    finest_scale = _get_scale(datasets[0].get("coordinateTransformations"), len(axes))
-    global_scale = _get_scale(multiscale.get("coordinateTransformations"), len(axes))
+    finest_transforms = datasets[0].get("coordinateTransformations")
+    global_transforms = multiscale.get("coordinateTransformations")
+    finest_scale = _get_scale(finest_transforms, len(axes))
+    finest_translation = _get_translation(finest_transforms, len(axes))
+    global_scale = _get_scale(global_transforms, len(axes))
+    global_translation = _get_translation(global_transforms, len(axes))
+    is_spatial = [axis.get("type") == "space" for axis in axes]
+    # the dataset transformations apply first, then the global ones
     voxel_size = tuple(
         float(finest * overall)
-        for axis, finest, overall in zip(axes, finest_scale, global_scale, strict=True)
-        if axis.get("type") == "space"
+        for finest, overall, spatial in zip(
+            finest_scale, global_scale, is_spatial, strict=True
+        )
+        if spatial
+    )
+    translation = tuple(
+        float(finest * overall + offset)
+        for finest, overall, offset, spatial in zip(
+            finest_translation,
+            global_scale,
+            global_translation,
+            is_spatial,
+            strict=True,
+        )
+        if spatial
     )
     return ImageInfo(
         n_levels=len(datasets),
         voxel_size=voxel_size,
+        translation=translation,
         level_paths=tuple(dataset["path"] for dataset in datasets),
     )
 
@@ -165,10 +198,10 @@ def write_ome_zarr_labels(
 ) -> Path:
     """Write a label image as an OME-Zarr v0.5 multiscale pyramid.
 
-    The input is not changed. Levels are made by taking every second voxel, which
-    keeps the label values valid but can drop structures thinner than a voxel of
-    the level. Labels are stored as int32, unless they already have a dtype the
-    viewer can render.
+    The input is not changed, and a translation in its metadata is kept. Levels
+    are made by taking every second voxel, which keeps the label values valid but
+    can drop structures thinner than a voxel of the level. Labels are stored as
+    int32, unless they already have a dtype the viewer can render.
 
     Parameters
     ----------
@@ -200,6 +233,7 @@ def write_ome_zarr_labels(
     if Path(output_path).exists():
         raise FileExistsError(f"{output_path} already exists, it is not overwritten.")
     source = da.from_zarr(open_image(input_path))
+    translation = image_info(input_path).translation
     if source.ndim != 3:
         raise ValueError(f"Expected a 3D image, got {source.ndim} dimensions.")
     if n_levels is not None and n_levels < 1:
@@ -227,7 +261,13 @@ def write_ome_zarr_labels(
                     {
                         "type": "scale",
                         "scale": [float(size) * 2**index for size in voxel_size],
-                    }
+                    },
+                    # every level starts at the same voxel, so the same position
+                    *(
+                        [{"type": "translation", "translation": list(translation)}]
+                        if translation and any(translation)
+                        else []
+                    ),
                 ],
             }
         )

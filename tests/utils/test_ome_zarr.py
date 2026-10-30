@@ -82,6 +82,78 @@ def test_older_ome_zarr_metadata(tmp_path, labels):
     np.testing.assert_array_equal(open_image(tmp_path / "old.zarr")[:], labels)
 
 
+def test_translation_combines_dataset_and_global(tmp_path, labels):
+    """The dataset transformations apply first, then the global ones."""
+    group = zarr.open_group(str(tmp_path / "shifted.zarr"), mode="w")
+    group.create_array("0", data=labels, chunks=(8, 8, 8))
+    group.attrs["ome"] = {
+        "version": "0.5",
+        "multiscales": [
+            {
+                "axes": [{"name": name, "type": "space"} for name in "zyx"],
+                "coordinateTransformations": [
+                    {"type": "scale", "scale": [2, 2, 2]},
+                    {"type": "translation", "translation": [100, 0, 0]},
+                ],
+                "datasets": [
+                    {
+                        "path": "0",
+                        "coordinateTransformations": [
+                            {"type": "scale", "scale": [1, 1, 1]},
+                            {"type": "translation", "translation": [5, 10, 0]},
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+
+    info = image_info(tmp_path / "shifted.zarr")
+    assert info.voxel_size == (2.0, 2.0, 2.0)
+    assert info.translation == (110.0, 20.0, 0.0)
+
+
+def test_plain_array_has_no_translation(tmp_path, labels):
+    """A plain zarr array has no translation and a pyramid of it has zero."""
+    path = _write_array(tmp_path / "plain.zarr", labels)
+    assert image_info(path).translation is None
+
+    write_ome_zarr_labels(path, tmp_path / "pyramid.zarr", (1.0, 1.0, 1.0), n_levels=2)
+    assert image_info(tmp_path / "pyramid.zarr").translation == (0.0, 0.0, 0.0)
+
+
+def test_converter_keeps_the_translation(tmp_path, labels):
+    """Converting an image with a translation keeps it where it is."""
+    input_path = tmp_path / "shifted.zarr"
+    group = zarr.open_group(str(input_path), mode="w")
+    group.create_array("0", data=labels, chunks=(8, 8, 8))
+    group.attrs["ome"] = {
+        "version": "0.5",
+        "multiscales": [
+            {
+                "axes": [{"name": name, "type": "space"} for name in "zyx"],
+                "datasets": [
+                    {
+                        "path": "0",
+                        "coordinateTransformations": [
+                            {"type": "scale", "scale": [1, 1, 1]},
+                            {"type": "translation", "translation": [5, 10, 15]},
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    output_path = tmp_path / "pyramid.zarr"
+
+    write_ome_zarr_labels(input_path, output_path, (1.0, 1.0, 1.0), n_levels=2)
+
+    assert image_info(output_path).translation == (5.0, 10.0, 15.0)
+    label_store = pytest.importorskip("cellier.data.label")
+    store = label_store.OMEZarrLabelDataStore.from_path(output_path.as_uri())
+    assert list(store.physical_translation) == [5.0, 10.0, 15.0]
+
+
 def test_write_pyramid(tmp_path, labels):
     """Each level takes every second voxel and the metadata says where it is."""
     input_path = _write_array(tmp_path / "plain.zarr", labels)

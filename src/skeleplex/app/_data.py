@@ -532,14 +532,20 @@ class SegmentationView:
             transform[0, 0] = scale[0]  # z
             transform[1, 1] = scale[1]  # y
             transform[2, 2] = scale[2]  # x
+            transform[:3, 3] = self._data_manager.segmentation_translation
             self._transform = transform
 
         elif self._mode == ViewMode.BOUNDING_BOX:
             scale = np.array(self._data_manager.segmentation_scale)
+            translation = self._data_manager.segmentation_translation
             segmentation_shape = self._data_manager._segmentation.shape
             # get the bounding box in voxel coordinates
-            bounding_box_min_vx = np.round(self.bounding_box.min_coordinate / scale)
-            bounding_box_max_vx = np.round(self.bounding_box.max_coordinate / scale)
+            bounding_box_min_vx = np.round(
+                (self.bounding_box.min_coordinate - translation) / scale
+            )
+            bounding_box_max_vx = np.round(
+                (self.bounding_box.max_coordinate - translation) / scale
+            )
 
             # clamp the bounding box to the segmentation shape
             bounding_box_min_vx = np.maximum(bounding_box_min_vx, 0).astype(np.int64)
@@ -561,9 +567,7 @@ class SegmentationView:
             transform[0, 0] = scale[0]  # z
             transform[1, 1] = scale[1]  # y
             transform[2, 2] = scale[2]  # x
-            transform[0, 3] = bounding_box_min_vx[0] * scale[0]  # z
-            transform[1, 3] = bounding_box_min_vx[1] * scale[1]  # y
-            transform[2, 3] = bounding_box_min_vx[2] * scale[2]  # x
+            transform[:3, 3] = bounding_box_min_vx * scale + translation
             self._transform = transform
         else:
             raise NotImplementedError(f"View mode {self._mode} not implemented.")
@@ -844,6 +848,17 @@ class DataManager:
         if self.files.segmentation is not None:
             return self.files.segmentation.voxel_size_um
         return None
+
+    @property
+    def segmentation_translation(self) -> np.ndarray:
+        """Get the world (z, y, x) position of the first voxel of the segmentation.
+
+        This comes from the metadata of the image, and is 0 if it has none.
+        """
+        info = self._segmentation_info
+        if info is not None and info.translation:
+            return np.array(info.translation)
+        return np.zeros(3)
 
     @property
     def node_coordinates(self) -> np.ndarray | None:

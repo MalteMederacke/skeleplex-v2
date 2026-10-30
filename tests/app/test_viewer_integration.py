@@ -30,6 +30,7 @@ from skeleplex.visualize import EdgeColormap
 SPAN = 20000.0
 NODE_SIZE = 900.0
 VOXEL_SIZE = 100.0
+TRANSLATION_Z = 1000.0
 NODES = {
     0: [SPAN * 0.1, 0.0, SPAN * 0.1],
     1: [SPAN * 0.5, SPAN * 0.5, SPAN * 0.5],
@@ -726,3 +727,65 @@ def test_conflicting_voxel_size_is_refused(data_paths, multiscale_segmentation):
             segmentation_path=str(multiscale_segmentation),
             segmentation_voxel_size_um=(1.0, 1.0, 1.0),
         )
+
+
+@pytest.fixture
+def translated_multiscale_segmentation(data_paths):
+    """Write a pyramid whose metadata places it 1000 um along z.
+
+    The labels are written 100 voxels before the position of the plain test
+    segmentation, so that the translation brings them back on the skeleton.
+    """
+    _, segmentation_path = data_paths
+    output_path = segmentation_path.with_name("translated.ome.zarr")
+    shift_voxels = int(TRANSLATION_Z / VOXEL_SIZE)
+    shifted_path = segmentation_path.with_name("shifted.zarr")
+    source = zarr.open(str(segmentation_path), mode="r")[:]
+    shifted = zarr.open(
+        str(shifted_path), mode="w", shape=source.shape, chunks=(64, 64, 64), dtype="u2"
+    )
+    shifted[:-shift_voxels] = source[shift_voxels:]
+    write_ome_zarr_labels(
+        shifted_path, output_path, (VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE), n_levels=3
+    )
+    group = zarr.open_group(str(output_path), mode="r+")
+    ome = dict(group.attrs["ome"])
+    ome["multiscales"][0]["coordinateTransformations"] = [
+        {"type": "translation", "translation": [TRANSLATION_Z, 0.0, 0.0]}
+    ]
+    group.attrs["ome"] = ome
+    return output_path
+
+
+def test_segmentation_translation_is_applied(
+    run_in_viewer, translated_multiscale_segmentation
+):
+    """A translation in the metadata places the visual and the bounding box crop."""
+
+    async def scenario(viewer):
+        view = viewer.data.segmentation_view
+        expected = np.array([TRANSLATION_Z, 0.0, 0.0])
+
+        view.mode = "all"
+        await viewer.settle(1.0)
+        components = viewer.canvas._multiscale_segmentation
+        assert np.allclose(components.visual.transform.matrix[:3, 3], expected)
+        assert np.allclose(components.data_store.physical_translation, expected)
+
+        # the same world region has to give the same labels as without translation
+        view.bounding_box._min_coordinate = np.array([7000.0, 7000.0, 7000.0])
+        view.bounding_box._max_coordinate = np.array([13000.0, 13000.0, 13000.0])
+        view.mode = "bounding_box"
+        await viewer.settle(1.0)
+        store = viewer.canvas._segmentation.data_store
+        assert store.data.shape == (60, 60, 60)
+        assert np.allclose(
+            viewer.canvas._segmentation.visual.transform.matrix[:3, 3], 7000.0
+        )
+        # label 1 fills 8000 to 12000 um on all the axes in world coordinates
+        assert store.data[30, 30, 30] == 1
+        assert store.data[5, 30, 30] == 0
+        assert store.data[9, 30, 30] == 0
+        assert store.data[11, 30, 30] == 1
+
+    run_in_viewer(scenario, segmentation=translated_multiscale_segmentation)
